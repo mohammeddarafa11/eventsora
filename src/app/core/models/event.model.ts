@@ -9,6 +9,8 @@ export interface Event {
   longitude?: number;
   city: string;
   region: string;
+  name_of_place?: string;
+  street?: string;
   online_url?: string;
   event_img_url?: string;
   event_type: EventType;
@@ -32,6 +34,8 @@ export interface CreateEventDto {
   description: string;
   city: string;
   region: string;
+  name_of_place?: string;
+  street?: string;
   online_url?: string;
   event_img_url?: string;
   event_type: number;
@@ -47,6 +51,8 @@ export interface UpdateEventDto {
   description: string;
   city?: string | null;
   region?: string | null;
+  name_of_place?: string | null;
+  street?: string | null;
   online_url?: string | null;
   event_img_url?: string | null;
   event_type: number;

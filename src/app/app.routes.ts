@@ -28,6 +28,13 @@ export const routes: Routes = [
             (m) => m.EventsPageComponent,
           ),
       },
+      {
+        path: 'tickets',
+        loadComponent: () =>
+          import('./features/tickets/tickets-page/tickets-page').then(
+            (m) => m.TicketsPageComponent,
+          ),
+      },
     ],
   },
   { path: '**', redirectTo: '' },

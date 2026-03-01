@@ -1,6 +1,8 @@
 // src/app/shared/components/app-sidebar/app-sidebar.component.ts
 import { Component, computed, inject, input, output } from '@angular/core';
-import { Router } from '@angular/router';
+import { Router, NavigationEnd } from '@angular/router';
+import { toSignal } from '@angular/core/rxjs-interop';
+import { filter, map, startWith } from 'rxjs/operators';
 import { DarkModeService } from '@core/services/darkmode.service';
 import { LayoutModule } from '@shared/components/layout/layout.module';
 import { ZardAvatarComponent } from '@shared/components/avatar/avatar.component';
@@ -41,6 +43,16 @@ export class AppSidebarComponent {
   private darkModeService = inject(DarkModeService);
   private authService = inject(AuthService);
 
+  // Track current URL reactively
+  private currentUrl = toSignal(
+    this.router.events.pipe(
+      filter((e) => e instanceof NavigationEnd),
+      map((e) => (e as NavigationEnd).urlAfterRedirects),
+      startWith(this.router.url)
+    ),
+    { initialValue: this.router.url }
+  );
+
   // Theme icon computed from current dark mode state
   themeIcon = computed(() => {
     const isDark = this.darkModeService.isCurrentlyDark();
@@ -70,7 +82,20 @@ export class AppSidebarComponent {
       label: 'Events',
       route: '/events',
     },
+    {
+      icon: 'ticket' as ZardIcon,
+      label: 'Tickets',
+      route: '/tickets',
+    },
   ];
+
+  // Derive the current page name from the active route
+  currentPageName = computed(() => {
+    const url = this.currentUrl() ?? '';
+    const allItems = [...this.mainMenuItems, ...this.workspaceMenuItems];
+    const match = allItems.find((item) => item.route && url.startsWith(item.route));
+    return match?.label ?? 'Dashboard';
+  });
 
   navigateTo(route: string) {
     if (route) {
