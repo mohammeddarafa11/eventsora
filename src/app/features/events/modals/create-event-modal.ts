@@ -915,53 +915,65 @@ export class CreateEventModalComponent implements OnInit {
   }
 
   // ── Submit ───────────────────────────────────────────────────────────────────
-  onSubmit() {
-    this.eventForm.markAllAsTouched();
-    if (this.eventForm.invalid) {
-      const s1 = ['title', 'description', 'categoryId'];
-      const s2 = this.isOnline()
-        ? ['start_time', 'end_time', 'online_url']
-        : ['start_time', 'end_time', 'city', 'region'];
-      if (s1.some(k => this.f[k].invalid))      this.currentStep.set(1);
-      else if (s2.some(k => this.f[k].invalid)) this.currentStep.set(2);
-      toast.error('Please complete all required fields');
-      return;
-    }
-    this.loading.set(true);
-    const v = this.eventForm.value;
-    const dto: CreateEventWithTicketsDto = {
-      title:               v.title,
-      description:         v.description,
-      event_img_url:       v.event_img_url   || null,
-      start_time:          new Date(v.start_time).toISOString(),
-      end_time:            new Date(v.end_time).toISOString(),
-      event_type:          Number(v.event_type),           // 0=Public,  1=Private
-      event_location_type: Number(v.event_location_type),  // 0=Online,  1=Offline
-      city:                v.city            || null,
-      region:              v.region          || null,
-      street:              v.street          || null,
-      name_of_place:       v.name_of_place   || null,
-      online_url:          v.online_url      || null,
-      categoryId:          Number(v.categoryId),
-      organizationId:      Number(v.organizationId),
-      tickets: (v.tickets as any[]).map(t => ({
-        templateId:    Number(t.templateId),
-        quantity:      Number(t.quantity),
-        priceOverride: Number(t.priceOverride),
-      })),
-    };
-    this.ticketService.createEventWithTickets(dto).subscribe({
-      next: () => {
-        toast.success('Event published successfully!');
-        this.loading.set(false);
-        this.created.emit();
-      },
-      error: err => {
-        toast.error(err.message ?? 'Failed to publish event');
-        this.loading.set(false);
-      },
-    });
+// Only showing the onSubmit method change; the rest of the file remains as provided.
+onSubmit() {
+  this.eventForm.markAllAsTouched();
+  if (this.eventForm.invalid) {
+    const s1 = ['title', 'description', 'categoryId'];
+    const s2 = this.isOnline()
+      ? ['start_time', 'end_time', 'online_url']
+      : ['start_time', 'end_time', 'city', 'region'];
+    if (s1.some(k => this.f[k].invalid))      this.currentStep.set(1);
+    else if (s2.some(k => this.f[k].invalid)) this.currentStep.set(2);
+    toast.error('Please complete all required fields');
+    return;
   }
+
+  const v = this.eventForm.value;
+  const startTime = v.start_time ? new Date(v.start_time) : null;
+  const endTime = v.end_time ? new Date(v.end_time) : null;
+
+  if (!startTime || !endTime || isNaN(startTime.getTime()) || isNaN(endTime.getTime())) {
+    toast.error('Please provide valid start and end dates');
+    return;
+  }
+
+  this.loading.set(true);
+  const dto: CreateEventWithTicketsDto = {
+    title: v.title,
+    description: v.description,
+    event_img_url: v.event_img_url || null,
+    start_time: startTime.toISOString(),
+    end_time: endTime.toISOString(),
+    event_type: Number(v.event_type),
+    event_location_type: Number(v.event_location_type),
+    city: v.city || null,
+    region: v.region || null,
+    street: v.street || null,
+    name_of_place: v.name_of_place || null,
+    online_url: v.online_url || null,
+    categoryId: Number(v.categoryId),
+    organizationId: Number(v.organizationId),
+    tickets: (v.tickets as any[]).map(t => ({
+      templateId: Number(t.templateId),
+      quantity: Number(t.quantity),
+      priceOverride: Number(t.priceOverride),
+    })),
+  };
+
+  this.ticketService.createEventWithTickets(dto).subscribe({
+    next: () => {
+      toast.success('Event published successfully!');
+      this.loading.set(false);
+      this.created.emit();
+    },
+    error: err => {
+      // ✅ Use err.error?.message to match service error shape
+      toast.error(err.error?.message ?? 'Failed to publish event');
+      this.loading.set(false);
+    },
+  });
+}
 
   onClose() { this.close.emit(); }
 }

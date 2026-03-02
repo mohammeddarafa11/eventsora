@@ -115,8 +115,8 @@ export interface UpdateEventDto {
   name_of_place?:      string | null;
   online_url?:         string | null;
   event_img_url?:      string | null;
-  event_location_type: number;
-  event_type:          number;
+  event_location_type?: number;
+  event_type?:          number;
   organizationId:      number;
   categoryId:          number;
 }

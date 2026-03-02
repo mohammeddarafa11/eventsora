@@ -24,7 +24,7 @@ import { AppSidebarComponent } from '@shared/components/app-sidebar/app-sidebar.
   standalone: true,
 })
 export class Dashboard {
-  readonly sidebarCollapsed = signal(false);
+  readonly sidebarCollapsed = signal(true);
 
   toggleSidebar() {
     this.sidebarCollapsed.update((collapsed) => !collapsed);

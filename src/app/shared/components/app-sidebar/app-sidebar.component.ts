@@ -36,14 +36,14 @@ export interface MenuItem {
   standalone: true,
 })
 export class AppSidebarComponent {
-  collapsed = input<boolean>(false);
+  // 👇 Default to true → collapsed by default (mobile‑first)
+  collapsed = input<boolean>(true);
   collapsedChange = output<boolean>();
 
   private router = inject(Router);
   private darkModeService = inject(DarkModeService);
   private authService = inject(AuthService);
 
-  // Track current URL reactively
   private currentUrl = toSignal(
     this.router.events.pipe(
       filter((e) => e instanceof NavigationEnd),
@@ -53,13 +53,11 @@ export class AppSidebarComponent {
     { initialValue: this.router.url }
   );
 
-  // Theme icon computed from current dark mode state
   themeIcon = computed(() => {
     const isDark = this.darkModeService.isCurrentlyDark();
     return (isDark ? 'sun' : 'moon') as ZardIcon;
   });
 
-  // Organization data from AuthService
   private organization = computed(() => this.authService.getOrganization());
   orgName = computed(() => this.organization()?.name ?? 'Organization');
   orgEmail = computed(() => this.organization()?.email ?? '');
@@ -89,7 +87,6 @@ export class AppSidebarComponent {
     },
   ];
 
-  // Derive the current page name from the active route
   currentPageName = computed(() => {
     const url = this.currentUrl() ?? '';
     const allItems = [...this.mainMenuItems, ...this.workspaceMenuItems];
