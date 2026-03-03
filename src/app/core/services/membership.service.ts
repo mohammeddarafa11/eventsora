@@ -15,6 +15,14 @@ interface SR<T> {
   message: string | null;
   errors:  string[] | null;
 }
+// The real shape returned by GET /members
+interface MemberDto {
+  userId:     number;
+  userName:   string;
+  email:      string;
+  joinedDate: string;
+  isBanned:   boolean;
+}
 
 @Injectable({ providedIn: 'root' })
 export class MembershipService {
@@ -24,16 +32,26 @@ export class MembershipService {
 
   getAllMembers(orgId: number): Observable<OrgMembership[]> {
     const members$ = this.http
-      .get<SR<OrgMembership[]>>(this.base + '/' + orgId + '/members')
-      .pipe(map(r => r.success ? (r.data ?? []) : []));
-
+      .get<SR<MemberDto[]>>(this.base + '/' + orgId + '/members')
+      .pipe(
+        map(r => (r.success ? (r.data ?? []) : []).map((m): OrgMembership => ({
+          userId:         m.userId,
+          organizationId: orgId,
+          status:         m.isBanned ? MembershipStatus.Banned : MembershipStatus.Approved,
+          requestDate:    m.joinedDate,
+          joinDate:       m.joinedDate,
+          user: {
+            id:        m.userId,
+            firstName: m.userName,
+            email:     m.email,
+          },
+        })))
+      );
+  
     const pending$ = this.http
       .get<SR<PendingRequest[]>>(this.base + '/' + orgId + '/pending-requests')
-      .pipe(map(r => r.success ? (r.data ?? []) : []));
-
-    return forkJoin([members$, pending$]).pipe(
-      map(([members, pending]) => {
-        const pendingMapped: OrgMembership[] = pending.map(p => ({
+      .pipe(
+        map(r => (r.success ? (r.data ?? []) : []).map((p): OrgMembership => ({
           userId:         p.userId,
           organizationId: orgId,
           status:         MembershipStatus.Pending,
@@ -44,11 +62,13 @@ export class MembershipService {
             firstName: p.userName,
             email:     p.email,
           },
-        }));
-
+        })))
+      );
+  
+    return forkJoin([members$, pending$]).pipe(
+      map(([members, pending]) => {
         const memberIds = new Set(members.map(m => m.userId));
-        const uniquePending = pendingMapped.filter(p => !memberIds.has(p.userId));
-
+        const uniquePending = pending.filter(p => !memberIds.has(p.userId));
         return [...members, ...uniquePending];
       }),
       catchError(this.handleError),
