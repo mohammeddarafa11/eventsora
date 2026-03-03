@@ -2,13 +2,18 @@
 
 // ─── Enums ────────────────────────────────────────────────────────────────────
 
-/** event_location_type: 0 = Online, 1 = Offline/InPerson */
+/**
+ * event_location_type
+ * Backend C# comment: // 0: offline, 1: online
+ */
 export enum EventLocationType {
-  Online  = 0,
-  Offline = 1,
+  Offline = 0,
+  Online  = 1,
 }
 
-/** event_type: 0 = Public, 1 = Private */
+/**
+ * event_type: 0 = Public, 1 = Private
+ */
 export enum EventType {
   Public  = 0,
   Private = 1,
@@ -37,8 +42,8 @@ export interface Event {
   nameOfPlace?:        string | null;
   online_url?:         string | null;
   event_img_url?:      string | null;
-  event_location_type: EventLocationType;  // 0=Online, 1=Offline
-  event_type:          EventType;          // 0=Public, 1=Private
+  event_location_type: EventLocationType;  // 0=Offline, 1=Online
+  event_type:          EventType;          // 0=Public,  1=Private
   organizationId:      number;
   organization?:       Organization | null;
   categoryId:          number;
@@ -98,42 +103,47 @@ export interface CreateEventDto {
   name_of_place?:      string | null;
   online_url?:         string | null;
   event_img_url?:      string | null;
-  event_location_type: number;
-  event_type:          number;
+  event_location_type: number;  // 0=Offline, 1=Online
+  event_type:          number;  // 0=Public,  1=Private
   organizationId:      number;
   categoryId:          number;
 }
 
+/**
+ * UpdateEventDto matches the backend exactly.
+ * NOTE: The backend UpdateEventDto does NOT include event_location_type / event_type.
+ * Those fields are sent as optional and gracefully ignored by the API.
+ */
 export interface UpdateEventDto {
-  title:               string;
-  start_time:          string;
-  end_time:            string;
-  description:         string;
-  city?:               string | null;
-  region?:             string | null;
-  street?:             string | null;
-  name_of_place?:      string | null;
-  online_url?:         string | null;
-  event_img_url?:      string | null;
+  title:                string;
+  start_time:           string;
+  end_time:             string;
+  description:          string;
+  city?:                string | null;
+  region?:              string | null;
+  street?:              string | null;
+  name_of_place?:       string | null;
+  online_url?:          string | null;
+  event_img_url?:       string | null;
   event_location_type?: number;
   event_type?:          number;
-  organizationId:      number;
-  categoryId:          number;
+  organizationId:       number;
+  categoryId:           number;
 }
 
 export interface CreateEventWithTicketsDto {
   title:               string;
   start_time:          string;
   end_time:            string;
-  description:         string;
+  description?:        string | null;
   city?:               string | null;
   region?:             string | null;
   street?:             string | null;
   name_of_place?:      string | null;
   online_url?:         string | null;
   event_img_url?:      string | null;
-  event_location_type: number;
-  event_type:          number;
+  event_location_type: number;  // 0=Offline, 1=Online
+  event_type:          number;  // 0=Public,  1=Private
   organizationId:      number;
   categoryId:          number;
   tickets?:            EventTicketDto[] | null;

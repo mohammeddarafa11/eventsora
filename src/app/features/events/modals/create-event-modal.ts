@@ -1,4 +1,4 @@
-// src/app/features/events/create-event-modal/create-event-modal.component.ts
+// src/app/features/events/modals/create-event-modal.ts
 import {
   Component, computed, inject, OnInit, output, signal, ChangeDetectionStrategy,
 } from '@angular/core';
@@ -17,6 +17,14 @@ import {
 
 import { ZardIconComponent } from '@shared/components/icon/icon.component';
 import { ZardSwitchComponent } from '@shared/components/switch/switch.component';
+
+// Backend enum values:
+//   EventLocationType: 0 = Offline/In-Person,  1 = Online
+//   EventType:         0 = Public,              1 = Private
+const LOC_ONLINE  = 1;  // backend: 1 = online
+const LOC_OFFLINE = 0;  // backend: 0 = offline / in-person
+const TYPE_PUBLIC  = 0;
+const TYPE_PRIVATE = 1;
 
 const TOTAL_STEPS = 3;
 
@@ -74,7 +82,6 @@ const TOTAL_STEPS = 3;
     .tier-vip      { border-left: 3px solid #f59e0b; }
     .tier-premium  { border-left: 3px solid #8b5cf6; }
 
-    /* ── Toggle option cards ── */
     .toggle-card {
       cursor: pointer;
       user-select: none;
@@ -89,7 +96,6 @@ const TOTAL_STEPS = 3;
 
     .toggle-card.inactive { opacity: .38; }
 
-    /* Icon accent colours */
     .icon-public   { color: #10b981; }
     .icon-private  { color: #8b5cf6; }
     .icon-online   { color: #f59e0b; }
@@ -97,14 +103,14 @@ const TOTAL_STEPS = 3;
   `],
 
   template: `
-<!-- ░░░  BACKDROP  ░░░ -->
+<!-- BACKDROP -->
 <div
   class="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-6"
   style="background:rgba(0,0,0,.72); backdrop-filter:blur(16px)"
   (click)="onClose()"
 >
 
-<!-- ░░░  MODAL  ░░░ -->
+<!-- MODAL -->
 <div
   class="modal-enter relative w-full sm:max-w-[900px]
          flex flex-col sm:flex-row bg-zinc-950 text-zinc-100
@@ -114,7 +120,7 @@ const TOTAL_STEPS = 3;
   (click)="$event.stopPropagation()"
 >
 
-  <!-- ══════════════════  LEFT — Preview  ══════════════════ -->
+  <!-- ══ LEFT — Preview ══ -->
   <div class="hidden sm:flex flex-col w-[320px] shrink-0 relative overflow-hidden"
        style="background:linear-gradient(160deg,#18181b 0%,#0f0f11 100%)">
 
@@ -216,7 +222,7 @@ const TOTAL_STEPS = 3;
     }
   </div>
 
-  <!-- ══════════════════  RIGHT — Form  ══════════════════ -->
+  <!-- ══ RIGHT — Form ══ -->
   <div class="flex flex-col flex-1 min-w-0 min-h-0">
 
     <div class="flex items-center justify-between px-6 pt-6 pb-5 shrink-0">
@@ -248,9 +254,7 @@ const TOTAL_STEPS = 3;
     <form [formGroup]="eventForm" (ngSubmit)="onSubmit()" class="flex flex-col flex-1 min-h-0">
       <div class="flex-1 overflow-y-auto thin-scroll px-6 py-2">
 
-        <!-- ╔══════════════════╗
-             ║  STEP 1 Details  ║
-             ╚══════════════════╝ -->
+        <!-- ══ STEP 1 ══ -->
         @if (currentStep() === 1) {
           <div class="step-animate space-y-6 pb-6">
 
@@ -301,22 +305,22 @@ const TOTAL_STEPS = 3;
               }
             </div>
 
-            <!-- ══ Event Settings ══ -->
+            <!-- Event Settings -->
             <div class="space-y-5">
               <label class="text-[11px] font-semibold tracking-widest uppercase text-zinc-500">
                 Event Settings <span class="text-amber-400">*</span>
               </label>
 
-              <!-- Visibility row -->
+              <!-- Visibility -->
               <div class="space-y-2">
                 <p class="text-[11px] font-medium uppercase tracking-widest text-zinc-600">Visibility</p>
                 <div class="grid grid-cols-2 gap-3">
 
-                  <!-- Public card -->
+                  <!-- Public -->
                   <div class="toggle-card rounded-2xl border border-white/[.06] p-4"
                        [class.active-public]="isPublic()"
                        [class.inactive]="!isPublic()"
-                       (click)="setVisibility(0)">
+                       (click)="setVisibility(TYPE_PUBLIC)">
                     <div class="flex items-start justify-between gap-2 mb-3">
                       <div class="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
                            style="background:rgba(16,185,129,.12)">
@@ -333,11 +337,11 @@ const TOTAL_STEPS = 3;
                     <p class="text-[11px] text-zinc-500 mt-0.5">Visible to everyone</p>
                   </div>
 
-                  <!-- Private card -->
+                  <!-- Private -->
                   <div class="toggle-card rounded-2xl border border-white/[.06] p-4"
                        [class.active-private]="!isPublic()"
                        [class.inactive]="isPublic()"
-                       (click)="setVisibility(1)">
+                       (click)="setVisibility(TYPE_PRIVATE)">
                     <div class="flex items-start justify-between gap-2 mb-3">
                       <div class="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
                            style="background:rgba(139,92,246,.12)">
@@ -353,20 +357,19 @@ const TOTAL_STEPS = 3;
                     <p class="text-[13px] font-semibold text-zinc-100">Private</p>
                     <p class="text-[11px] text-zinc-500 mt-0.5">Invite-only access</p>
                   </div>
-
                 </div>
               </div>
 
-              <!-- Format row -->
+              <!-- Format -->
               <div class="space-y-2">
                 <p class="text-[11px] font-medium uppercase tracking-widest text-zinc-600">Format</p>
                 <div class="grid grid-cols-2 gap-3">
 
-                  <!-- Online card -->
+                  <!-- Online  — backend value 1 -->
                   <div class="toggle-card rounded-2xl border border-white/[.06] p-4"
                        [class.active-online]="isOnline()"
                        [class.inactive]="!isOnline()"
-                       (click)="setLocationType(0)">
+                       (click)="setLocationType(LOC_ONLINE)">
                     <div class="flex items-start justify-between gap-2 mb-3">
                       <div class="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
                            style="background:rgba(245,158,11,.12)">
@@ -383,11 +386,11 @@ const TOTAL_STEPS = 3;
                     <p class="text-[11px] text-zinc-500 mt-0.5">Stream or video call</p>
                   </div>
 
-                  <!-- In-Person card -->
+                  <!-- In-Person — backend value 0 -->
                   <div class="toggle-card rounded-2xl border border-white/[.06] p-4"
                        [class.active-offline]="!isOnline()"
                        [class.inactive]="isOnline()"
-                       (click)="setLocationType(1)">
+                       (click)="setLocationType(LOC_OFFLINE)">
                     <div class="flex items-start justify-between gap-2 mb-3">
                       <div class="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
                            style="background:rgba(99,102,241,.12)">
@@ -403,11 +406,9 @@ const TOTAL_STEPS = 3;
                     <p class="text-[13px] font-semibold text-zinc-100">In-Person</p>
                     <p class="text-[11px] text-zinc-500 mt-0.5">Physical venue</p>
                   </div>
-
                 </div>
               </div>
             </div>
-            <!-- ── end Event Settings ── -->
 
             <!-- Cover image -->
             <div class="space-y-1.5">
@@ -425,13 +426,10 @@ const TOTAL_STEPS = 3;
                 </div>
               }
             </div>
-
           </div>
         }
 
-        <!-- ╔══════════════════════════════╗
-             ║  STEP 2  Schedule + Location  ║
-             ╚══════════════════════════════╝ -->
+        <!-- ══ STEP 2 ══ -->
         @if (currentStep() === 2) {
           <div class="step-animate space-y-6 pb-6">
 
@@ -449,6 +447,9 @@ const TOTAL_STEPS = 3;
                   <input type="datetime-local" formControlName="start_time" style="font-size:14px !important"/>
                 </div>
               </div>
+              @if (f['start_time'].invalid && f['start_time'].touched) {
+                <p class="text-[11px] text-red-400">Start time is required</p>
+              }
               <div class="flex items-center gap-4 p-4 rounded-2xl border border-white/[.06] bg-white/[.02]">
                 <div class="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
                      style="background:rgba(239,68,68,.1)">
@@ -459,12 +460,16 @@ const TOTAL_STEPS = 3;
                   <input type="datetime-local" formControlName="end_time" style="font-size:14px !important"/>
                 </div>
               </div>
+              @if (f['end_time'].invalid && f['end_time'].touched) {
+                <p class="text-[11px] text-red-400">End time is required</p>
+              }
             </div>
 
             <div class="space-y-3">
               <label class="text-[11px] font-semibold tracking-widest uppercase text-zinc-500">Location</label>
 
               @if (!isOnline()) {
+                <!-- In-Person location fields -->
                 <div class="p-4 rounded-2xl border border-white/[.06] bg-white/[.02] space-y-4">
                   <div class="grid grid-cols-2 gap-x-5 gap-y-4">
                     <div class="space-y-1.5">
@@ -504,6 +509,7 @@ const TOTAL_STEPS = 3;
                   </div>
                 </div>
               } @else {
+                <!-- Online URL -->
                 <div class="p-4 rounded-2xl border border-amber-400/20 bg-amber-400/[.04] flex items-start gap-4">
                   <div class="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
                        style="background:rgba(245,158,11,.12)">
@@ -523,13 +529,10 @@ const TOTAL_STEPS = 3;
                 </div>
               }
             </div>
-
           </div>
         }
 
-        <!-- ╔═════════════════╗
-             ║  STEP 3 Tickets  ║
-             ╚═════════════════╝ -->
+        <!-- ══ STEP 3 Tickets ══ -->
         @if (currentStep() === 3) {
           <div class="step-animate pb-6">
 
@@ -648,7 +651,6 @@ const TOTAL_STEPS = 3;
                     </div>
                   </div>
                 }
-
               </div>
             }
           </div>
@@ -656,7 +658,7 @@ const TOTAL_STEPS = 3;
 
       </div><!-- /scroll -->
 
-      <!-- ── Footer ── -->
+      <!-- Footer -->
       <div class="shrink-0 px-6 py-5 border-t border-white/[.05] flex items-center justify-between gap-3"
            style="background:rgba(24,24,27,.8);backdrop-filter:blur(8px)">
 
@@ -704,10 +706,8 @@ const TOTAL_STEPS = 3;
             </button>
           }
         </div>
-
       </div>
     </form>
-
   </div><!-- /right panel -->
 </div><!-- /modal -->
 </div><!-- /backdrop -->
@@ -716,6 +716,12 @@ const TOTAL_STEPS = 3;
 export class CreateEventModalComponent implements OnInit {
   created = output<void>();
   close   = output<void>();
+
+  // Expose constants to template
+  readonly LOC_ONLINE  = LOC_ONLINE;
+  readonly LOC_OFFLINE = LOC_OFFLINE;
+  readonly TYPE_PUBLIC  = TYPE_PUBLIC;
+  readonly TYPE_PRIVATE = TYPE_PRIVATE;
 
   private fb              = inject(FormBuilder);
   private ticketService   = inject(TicketService);
@@ -737,20 +743,23 @@ export class CreateEventModalComponent implements OnInit {
     { step: 3, label: 'Tickets',  hint: 'Pricing & availability'     },
   ];
 
-  private _locationType = signal<number>(0); // 0=Online,  1=Offline
-  private _eventType    = signal<number>(0); // 0=Public,  1=Private
+  // Backend: 1 = Online (default), 0 = Offline
+  private _locationType = signal<number>(LOC_ONLINE);
+  // Backend: 0 = Public (default)
+  private _eventType    = signal<number>(TYPE_PUBLIC);
   private _title        = signal<string>('');
   private _imgUrl       = signal<string>('');
   private _startTime    = signal<string>('');
 
-  // Switch state — one boolean per option card
+  // Switch state — reflects current selection
   publicChecked  = true;
   privateChecked = false;
-  onlineChecked  = true;
+  onlineChecked  = true;   // default: Online selected
   offlineChecked = false;
 
-  isPublic     = computed(() => this._eventType() === 0);
-  isOnline     = computed(() => this._locationType() === 0);
+  isPublic  = computed(() => this._eventType() === TYPE_PUBLIC);
+  isOnline  = computed(() => this._locationType() === LOC_ONLINE);  // 1=Online
+
   previewTitle = computed(() => this._title());
   previewImg   = computed(() => this._imgUrl());
   previewDate  = computed(() => {
@@ -784,33 +793,34 @@ export class CreateEventModalComponent implements OnInit {
   }
 
   // ── Visibility ──────────────────────────────────────────────────────────────
-  setVisibility(value: 0 | 1) {
+  setVisibility(value: number) {
     this._eventType.set(value);
-    this.publicChecked  = value === 0;
-    this.privateChecked = value === 1;
+    this.publicChecked  = value === TYPE_PUBLIC;
+    this.privateChecked = value === TYPE_PRIVATE;
     this.eventForm.patchValue({ event_type: value });
   }
-  onPublicSwitchChange(c: boolean)  { c ? this.setVisibility(0) : (this.publicChecked  = true); }
-  onPrivateSwitchChange(c: boolean) { c ? this.setVisibility(1) : (this.privateChecked = true); }
+  onPublicSwitchChange(c: boolean)  { c ? this.setVisibility(TYPE_PUBLIC)  : (this.publicChecked  = true); }
+  onPrivateSwitchChange(c: boolean) { c ? this.setVisibility(TYPE_PRIVATE) : (this.privateChecked = true); }
 
   // ── Format ──────────────────────────────────────────────────────────────────
-  setLocationType(value: 0 | 1) {
+  // value: LOC_ONLINE (1) or LOC_OFFLINE (0) matching backend
+  setLocationType(value: number) {
     this._locationType.set(value);
-    this.onlineChecked  = value === 0;
-    this.offlineChecked = value === 1;
+    this.onlineChecked  = value === LOC_ONLINE;
+    this.offlineChecked = value === LOC_OFFLINE;
     this.eventForm.patchValue({ event_location_type: value });
     this.updateLocationValidators(value);
   }
-  onOnlineSwitchChange(c: boolean)  { c ? this.setLocationType(0) : (this.onlineChecked  = true); }
-  onOfflineSwitchChange(c: boolean) { c ? this.setLocationType(1) : (this.offlineChecked = true); }
+  onOnlineSwitchChange(c: boolean)  { c ? this.setLocationType(LOC_ONLINE)  : (this.onlineChecked  = true); }
+  onOfflineSwitchChange(c: boolean) { c ? this.setLocationType(LOC_OFFLINE) : (this.offlineChecked = true); }
 
   // ── Navigation ───────────────────────────────────────────────────────────────
   nextStep() {
     if (!this.validateCurrentStep()) return;
     if (this.currentStep() < this.totalSteps) this.currentStep.update(s => s + 1);
   }
-  prevStep()                { if (this.currentStep() > 1) this.currentStep.update(s => s - 1); }
-  goToStep(step: number)    { if (step >= 1 && step <= this.totalSteps) this.currentStep.set(step); }
+  prevStep()             { if (this.currentStep() > 1) this.currentStep.update(s => s - 1); }
+  goToStep(step: number) { if (step >= 1 && step <= this.totalSteps) this.currentStep.set(step); }
 
   private validateCurrentStep(): boolean {
     if (this.currentStep() === 1) {
@@ -862,8 +872,8 @@ export class CreateEventModalComponent implements OnInit {
       event_img_url:       [''],
       start_time:          ['', Validators.required],
       end_time:            ['', Validators.required],
-      event_type:          [0,  Validators.required],   // 0=Public,  1=Private
-      event_location_type: [0,  Validators.required],   // 0=Online,  1=Offline
+      event_type:          [TYPE_PUBLIC,   Validators.required],   // 0=Public
+      event_location_type: [LOC_ONLINE,    Validators.required],   // 1=Online (default)
       city:                [''],
       region:              [''],
       street:              [''],
@@ -876,17 +886,20 @@ export class CreateEventModalComponent implements OnInit {
     this.eventForm.get('title')?.valueChanges.subscribe(v => this._title.set(v ?? ''));
     this.eventForm.get('event_img_url')?.valueChanges.subscribe(v => this._imgUrl.set(v ?? ''));
     this.eventForm.get('start_time')?.valueChanges.subscribe(v => this._startTime.set(v ?? ''));
-    this.updateLocationValidators(0);
+    // Default is Online (1) → URL required
+    this.updateLocationValidators(LOC_ONLINE);
   }
 
   private updateLocationValidators(t: number) {
     const city   = this.eventForm.get('city')!;
     const region = this.eventForm.get('region')!;
     const url    = this.eventForm.get('online_url')!;
-    if (t === 0) {
-      city.clearValidators(); region.clearValidators();
+    if (t === LOC_ONLINE) {
+      // Online → URL required, no location fields
+      city.clearValidators();  region.clearValidators();
       url.setValidators([Validators.required, Validators.pattern(/^https?:\/\/.+/)]);
     } else {
+      // Offline/In-Person → city & region required
       city.setValidators(Validators.required);
       region.setValidators(Validators.required);
       url.clearValidators();
@@ -903,6 +916,7 @@ export class CreateEventModalComponent implements OnInit {
     }));
   }
   removeTicketRow(i: number) { this.ticketRows.removeAt(i); }
+
   getSelectedTemplate(i: number): TicketTemplate | null {
     const id = this.ticketRows.at(i).get('templateId')?.value;
     return this.templates().find(t => t.id === Number(id)) ?? null;
@@ -915,65 +929,71 @@ export class CreateEventModalComponent implements OnInit {
   }
 
   // ── Submit ───────────────────────────────────────────────────────────────────
-// Only showing the onSubmit method change; the rest of the file remains as provided.
-onSubmit() {
-  this.eventForm.markAllAsTouched();
-  if (this.eventForm.invalid) {
-    const s1 = ['title', 'description', 'categoryId'];
-    const s2 = this.isOnline()
-      ? ['start_time', 'end_time', 'online_url']
-      : ['start_time', 'end_time', 'city', 'region'];
-    if (s1.some(k => this.f[k].invalid))      this.currentStep.set(1);
-    else if (s2.some(k => this.f[k].invalid)) this.currentStep.set(2);
-    toast.error('Please complete all required fields');
-    return;
+  onSubmit() {
+    this.eventForm.markAllAsTouched();
+    if (this.eventForm.invalid) {
+      const s1 = ['title', 'description', 'categoryId'];
+      const s2 = this.isOnline()
+        ? ['start_time', 'end_time', 'online_url']
+        : ['start_time', 'end_time', 'city', 'region'];
+      if (s1.some(k => this.f[k].invalid))      this.currentStep.set(1);
+      else if (s2.some(k => this.f[k].invalid)) this.currentStep.set(2);
+      toast.error('Please complete all required fields');
+      return;
+    }
+
+    const v = this.eventForm.value;
+    const startTime = v.start_time ? new Date(v.start_time) : null;
+    const endTime   = v.end_time   ? new Date(v.end_time)   : null;
+
+    if (!startTime || !endTime || isNaN(startTime.getTime()) || isNaN(endTime.getTime())) {
+      toast.error('Please provide valid start and end dates');
+      return;
+    }
+
+    this.loading.set(true);
+
+    // CRITICAL: Backend returns 400 if city/region sent for online events, or
+    // online_url sent for offline events. Always null the conflicting side.
+    const locType = Number(v.event_location_type); // 0=Offline, 1=Online
+    const online  = locType === LOC_ONLINE;
+
+    const dto: CreateEventWithTicketsDto = {
+      title:               v.title,
+      description:         v.description   || null,
+      event_img_url:       v.event_img_url  || null,
+      start_time:          startTime.toISOString(),
+      end_time:            endTime.toISOString(),
+      event_type:          Number(v.event_type), // 0=Public, 1=Private
+      event_location_type: locType,              // 0=Offline, 1=Online
+      // Online  (1) → online_url sent; city/region/street MUST be null
+      // Offline (0) → city/region sent; online_url MUST be null
+      city:          online ? null : (v.city          || null),
+      region:        online ? null : (v.region        || null),
+      street:        online ? null : (v.street        || null),
+      name_of_place: online ? null : (v.name_of_place || null),
+      online_url:    online ? (v.online_url || null)  : null,
+      categoryId:    Number(v.categoryId),
+      organizationId: Number(v.organizationId),
+      tickets: (v.tickets as any[]).map(t => ({
+        templateId:    Number(t.templateId),
+        quantity:      Number(t.quantity),
+        priceOverride: Number(t.priceOverride),
+      })),
+    };
+
+    this.ticketService.createEventWithTickets(dto).subscribe({
+      next: () => {
+        toast.success('Event published successfully!');
+        this.loading.set(false);
+        this.created.emit();
+      },
+      error: err => {
+        toast.error(err.error?.message ?? 'Failed to publish event');
+        this.loading.set(false);
+      },
+    });
   }
-
-  const v = this.eventForm.value;
-  const startTime = v.start_time ? new Date(v.start_time) : null;
-  const endTime = v.end_time ? new Date(v.end_time) : null;
-
-  if (!startTime || !endTime || isNaN(startTime.getTime()) || isNaN(endTime.getTime())) {
-    toast.error('Please provide valid start and end dates');
-    return;
-  }
-
-  this.loading.set(true);
-  const dto: CreateEventWithTicketsDto = {
-    title: v.title,
-    description: v.description,
-    event_img_url: v.event_img_url || null,
-    start_time: startTime.toISOString(),
-    end_time: endTime.toISOString(),
-    event_type: Number(v.event_type),
-    event_location_type: Number(v.event_location_type),
-    city: v.city || null,
-    region: v.region || null,
-    street: v.street || null,
-    name_of_place: v.name_of_place || null,
-    online_url: v.online_url || null,
-    categoryId: Number(v.categoryId),
-    organizationId: Number(v.organizationId),
-    tickets: (v.tickets as any[]).map(t => ({
-      templateId: Number(t.templateId),
-      quantity: Number(t.quantity),
-      priceOverride: Number(t.priceOverride),
-    })),
-  };
-
-  this.ticketService.createEventWithTickets(dto).subscribe({
-    next: () => {
-      toast.success('Event published successfully!');
-      this.loading.set(false);
-      this.created.emit();
-    },
-    error: err => {
-      // ✅ Use err.error?.message to match service error shape
-      toast.error(err.error?.message ?? 'Failed to publish event');
-      this.loading.set(false);
-    },
-  });
-}
 
   onClose() { this.close.emit(); }
 }

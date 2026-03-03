@@ -85,6 +85,11 @@ export class AppSidebarComponent {
       label: 'Tickets',
       route: '/tickets',
     },
+    {
+      icon: 'users' as ZardIcon,
+      label: 'Members',
+      route: '/members',
+    },
   ];
 
   currentPageName = computed(() => {

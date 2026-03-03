@@ -35,6 +35,13 @@ export const routes: Routes = [
             (m) => m.TicketsPageComponent,
           ),
       },
+      {
+        path: 'members',
+        loadComponent: () =>
+          import('./features/members/memberships-page').then(
+            (m) => m.MembershipsPageComponent,
+          ),
+      },
     ],
   },
   { path: '**', redirectTo: '' },
