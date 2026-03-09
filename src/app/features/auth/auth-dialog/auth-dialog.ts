@@ -1,12 +1,6 @@
 // src/app/features/auth/auth-dialog/auth-dialog.ts
 import {
-  ChangeDetectionStrategy,
-  Component,
-  inject,
-  signal,
-  InjectionToken,
-  OnInit,
-  OnDestroy,
+  Component, inject, signal, InjectionToken, OnInit, OnDestroy,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormBuilder, FormGroup, Validators, ReactiveFormsModule } from '@angular/forms';
@@ -32,300 +26,385 @@ type Step =
 @Component({
   selector: 'app-auth-dialog',
   standalone: true,
-  changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [CommonModule, ReactiveFormsModule, ZardInputDirective, ZardIconComponent],
   template: `
     <link rel="preconnect" href="https://fonts.googleapis.com"/>
     <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet"/>
 
-    <div class="ad-shell" (click)="$event.stopPropagation()">
+    <!--
+      ╔══════════════════════════════════════════════════════╗
+      ║  BUG FIX: overflow-y-auto + max-h on the shell      ║
+      ║  Previously overflow:hidden clipped form content     ║
+      ║  when the dialog host constrained available height.  ║
+      ╚══════════════════════════════════════════════════════╝
+    -->
+    <div
+      class="relative w-full rounded-[18px] bg-[#09090c] text-[#F2EEE6] overflow-y-auto max-h-[90vh]"
+      style="font-family:'Plus Jakarta Sans',sans-serif"
+      (click)="$event.stopPropagation()"
+    >
+      <!-- Ambient glow -->
+      <div class="pointer-events-none absolute -top-20 -left-14 w-72 h-72 rounded-full z-0"
+           style="background:radial-gradient(circle,rgba(255,68,51,.07) 0%,transparent 70%)" aria-hidden="true"></div>
 
-      <div class="ad-glow" aria-hidden="true"></div>
-      <div class="ad-grain" aria-hidden="true"></div>
+      <!-- Grain overlay -->
+      <div class="pointer-events-none absolute inset-0 opacity-40 z-0 grain-bg" aria-hidden="true"></div>
 
-      <!-- Close button -->
-      <button type="button" (click)="close()" class="ad-close" aria-label="Close">
+      <!-- Close -->
+      <button type="button" (click)="close()"
+              class="absolute top-3.5 right-3.5 z-20 w-7 h-7 rounded-full flex items-center justify-center
+                     bg-white/5 border-0 cursor-pointer text-white/40
+                     hover:bg-white/10 hover:text-white/75 transition-all duration-150"
+              aria-label="Close">
         <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.4" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
         </svg>
       </button>
 
-      <!-- ═══ REGISTER: ROLE SELECTION ═══ -->
+      <!-- ══════════════════════════════════════════════════════════ -->
+      <!-- REGISTER: ROLE SELECTION                                   -->
+      <!-- ══════════════════════════════════════════════════════════ -->
       @if (step() === 'role-selection') {
-        <div class="ad-pane">
+        <div class="relative z-10 flex flex-col gap-5 px-5 pt-6 pb-7 animate-fadeUp">
           <ng-container *ngTemplateOutlet="brandTpl"></ng-container>
-          <div class="ad-progress-wrap">
-            <div class="ad-progress-track"><div class="ad-progress-fill" style="width:50%"></div></div>
-            <span class="ad-step-label">Step 1 of 2 — Account type</span>
+
+          <!-- Progress -->
+          <div class="flex flex-col gap-1.5">
+            <div class="w-full h-[3px] rounded-full bg-white/[0.06]">
+              <div class="h-full rounded-full bg-[#FF4433] transition-all duration-500" style="width:50%"></div>
+            </div>
+            <span class="text-[0.57rem] tracking-[.14em] uppercase text-white/30" style="font-family:'DM Mono',monospace">
+              Step 1 of 2 — Account type
+            </span>
           </div>
-          <div class="ad-head">
-            <h2 class="ad-title">Join as…</h2>
-            <p class="ad-sub">Choose how you want to use Eventsora</p>
+
+          <div class="flex flex-col gap-1">
+            <h2 class="text-[1.9rem] leading-none m-0 text-[#F2EEE6]" style="font-family:'Bebas Neue',sans-serif;letter-spacing:.04em">
+              Join as…
+            </h2>
+            <p class="text-[.8rem] text-white/40 font-light leading-relaxed m-0">Choose how you want to use Eventsora</p>
           </div>
-          <div class="ad-roles">
-            <button type="button" class="ad-role" [class.ad-role--coral]="regRole() === 'organizer'" (click)="selectRegRole('organizer')">
-              <ng-container *ngTemplateOutlet="checkTpl; context:{ active: regRole()==='organizer', gold: false }"></ng-container>
-              <div class="ad-role-icon ad-role-icon--coral">
-                <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" d="M3 7a2 2 0 012-2h14a2 2 0 012 2v12a2 2 0 01-2 2H5a2 2 0 01-2-2V7zM16 3v4M8 3v4M3 11h18"/>
-                </svg>
-              </div>
-              <strong class="ad-role-name">Organizer</strong>
-              <span class="ad-role-hint">Create &amp; manage events</span>
-            </button>
-            <button type="button" class="ad-role" [class.ad-role--gold]="regRole() === 'user'" (click)="selectRegRole('user')">
-              <ng-container *ngTemplateOutlet="checkTpl; context:{ active: regRole()==='user', gold: true }"></ng-container>
-              <div class="ad-role-icon ad-role-icon--gold">
-                <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z"/>
-                </svg>
-              </div>
-              <strong class="ad-role-name">Attendee</strong>
-              <span class="ad-role-hint">Discover &amp; book events</span>
-            </button>
-          </div>
-          <p class="ad-footer-text">
+
+          <ng-container *ngTemplateOutlet="rolePairTpl; context:{ selectFn: selectRegRole, activeRole: regRole() }"></ng-container>
+
+          <p class="text-center text-[.78rem] text-white/40">
             Already have an account?
-            <button type="button" class="ad-link" (click)="goto('login-role-selection')">Sign in</button>
+            <button type="button" class="bg-transparent border-0 p-0 text-[#FF4433] font-semibold cursor-pointer hover:opacity-75 transition-opacity text-[.78rem]" (click)="goto('login-role-selection')">Sign in</button>
           </p>
         </div>
       }
 
-      <!-- ═══ REGISTER: FORM ═══ -->
+      <!-- ══════════════════════════════════════════════════════════ -->
+      <!-- REGISTER: FORM                                             -->
+      <!-- ══════════════════════════════════════════════════════════ -->
       @if (step() === 'register') {
-        <div class="ad-pane">
+        <div class="relative z-10 flex flex-col gap-5 px-5 pt-6 pb-7 animate-fadeUp">
           <ng-container *ngTemplateOutlet="backTpl; context:{ target: 'role-selection' }"></ng-container>
-          <div class="ad-progress-wrap">
-            <div class="ad-progress-track">
-              <div class="ad-progress-fill" [class.ad-progress-fill--gold]="regRole()==='user'" style="width:100%"></div>
+
+          <!-- Progress -->
+          <div class="flex flex-col gap-1.5">
+            <div class="w-full h-[3px] rounded-full bg-white/[0.06]">
+              <div class="h-full rounded-full transition-all duration-500 w-full"
+                   [class]="regRole()==='user' ? 'bg-[#F0B429]' : 'bg-[#FF4433]'"></div>
             </div>
-            <span class="ad-step-label">Step 2 of 2 — Your details</span>
+            <span class="text-[0.57rem] tracking-[.14em] uppercase text-white/30" style="font-family:'DM Mono',monospace">
+              Step 2 of 2 — Your details
+            </span>
           </div>
-          <div class="ad-head">
-            <span class="ad-badge" [class.ad-badge--gold]="regRole()==='user'">
+
+          <div class="flex flex-col gap-1">
+            <span [class]="badgeClass(regRole())">
               {{ regRole()==='organizer' ? 'Organizer Account' : 'Attendee Account' }}
             </span>
-            <h2 class="ad-title">Create account</h2>
+            <h2 class="text-[1.9rem] leading-none m-0 text-[#F2EEE6]" style="font-family:'Bebas Neue',sans-serif;letter-spacing:.04em">
+              Create account
+            </h2>
           </div>
-          <form [formGroup]="registerForm" (ngSubmit)="onRegister()" class="ad-form">
+
+          <form [formGroup]="registerForm" (ngSubmit)="onRegister()" class="flex flex-col gap-3.5">
             @if (regRole() === 'organizer') {
-              <div class="ad-field">
-                <label class="ad-label">Organization Name *</label>
-                <input z-input formControlName="name" type="text" placeholder="Cairo Creative Hub" autocomplete="organization" class="ad-input"/>
-                @if (f('name').invalid && f('name').touched) { <span class="ad-ferr">Required</span> }
+              <div class="flex flex-col gap-1.5">
+                <label class="text-[.72rem] font-semibold text-white/60 tracking-[.01em]">Organization Name *</label>
+                <input z-input formControlName="name" type="text" placeholder="Cairo Creative Hub"
+                       autocomplete="organization" [class]="inputClass()"/>
+                @if (f('name').invalid && f('name').touched) {
+                  <span class="text-[.68rem] text-[#FF4433]">Required</span>
+                }
               </div>
             } @else {
-              <div class="ad-row">
-                <div class="ad-field">
-                  <label class="ad-label">First Name *</label>
-                  <input z-input formControlName="firstName" type="text" placeholder="Ahmed" autocomplete="given-name" class="ad-input"/>
-                  @if (f('firstName').invalid && f('firstName').touched) { <span class="ad-ferr">Required</span> }
+              <div class="grid grid-cols-2 gap-3">
+                <div class="flex flex-col gap-1.5">
+                  <label class="text-[.72rem] font-semibold text-white/60 tracking-[.01em]">First Name *</label>
+                  <input z-input formControlName="firstName" type="text" placeholder="Ahmed"
+                         autocomplete="given-name" [class]="inputClass()"/>
+                  @if (f('firstName').invalid && f('firstName').touched) {
+                    <span class="text-[.68rem] text-[#FF4433]">Required</span>
+                  }
                 </div>
-                <div class="ad-field">
-                  <label class="ad-label">Last Name *</label>
-                  <input z-input formControlName="lastName" type="text" placeholder="Hassan" autocomplete="family-name" class="ad-input"/>
-                  @if (f('lastName').invalid && f('lastName').touched) { <span class="ad-ferr">Required</span> }
+                <div class="flex flex-col gap-1.5">
+                  <label class="text-[.72rem] font-semibold text-white/60 tracking-[.01em]">Last Name *</label>
+                  <input z-input formControlName="lastName" type="text" placeholder="Hassan"
+                         autocomplete="family-name" [class]="inputClass()"/>
+                  @if (f('lastName').invalid && f('lastName').touched) {
+                    <span class="text-[.68rem] text-[#FF4433]">Required</span>
+                  }
                 </div>
               </div>
             }
-            <div class="ad-field">
-              <label class="ad-label">Email *</label>
-              <input z-input formControlName="email" type="email" placeholder="you@example.com" autocomplete="email" class="ad-input"/>
-              @if (f('email').invalid && f('email').touched) { <span class="ad-ferr">Valid email required</span> }
+
+            <div class="flex flex-col gap-1.5">
+              <label class="text-[.72rem] font-semibold text-white/60 tracking-[.01em]">Email *</label>
+              <input z-input formControlName="email" type="email" placeholder="you@example.com"
+                     autocomplete="email" [class]="inputClass()"/>
+              @if (f('email').invalid && f('email').touched) {
+                <span class="text-[.68rem] text-[#FF4433]">Valid email required</span>
+              }
             </div>
-            <div class="ad-field">
-              <label class="ad-label">Password *</label>
-              <input z-input formControlName="password" type="password" placeholder="Min. 6 characters" autocomplete="new-password" class="ad-input"/>
-              @if (f('password').invalid && f('password').touched) { <span class="ad-ferr">Min. 6 characters</span> }
+
+            <div class="flex flex-col gap-1.5">
+              <label class="text-[.72rem] font-semibold text-white/60 tracking-[.01em]">Password *</label>
+              <input z-input formControlName="password" type="password" placeholder="Min. 6 characters"
+                     autocomplete="new-password" [class]="inputClass()"/>
+              @if (f('password').invalid && f('password').touched) {
+                <span class="text-[.68rem] text-[#FF4433]">Min. 6 characters</span>
+              }
             </div>
+
             <ng-container *ngTemplateOutlet="alertsTpl"></ng-container>
-            <button type="submit" class="ad-cta" [class.ad-cta--gold]="regRole()==='user'" [disabled]="registerForm.invalid || busy()">
-              <span class="ad-cta-label">
-                @if (busy()) { <span class="ad-spin"></span> Creating… } @else { Create Account }
+
+            <button type="submit" [class]="ctaClass(regRole())" [disabled]="registerForm.invalid || busy()">
+              <span class="flex items-center gap-2">
+                @if (busy()) { <span class="spinner"></span> Creating… }
+                @else { Create Account }
               </span>
-              @if (!busy()) { <span class="ad-cta-arrow">→</span> }
+              @if (!busy()) { <span class="cta-arrow">→</span> }
             </button>
           </form>
-          <p class="ad-footer-text">
-            Have an account? <button type="button" class="ad-link" (click)="goto('login-role-selection')">Sign in</button>
+
+          <p class="text-center text-[.78rem] text-white/40">
+            Have an account?
+            <button type="button" class="bg-transparent border-0 p-0 text-[#FF4433] font-semibold cursor-pointer hover:opacity-75 transition-opacity text-[.78rem]" (click)="goto('login-role-selection')">Sign in</button>
           </p>
         </div>
       }
 
-      <!-- ═══ VERIFY EMAIL ═══ -->
+      <!-- ══════════════════════════════════════════════════════════ -->
+      <!-- VERIFY EMAIL                                               -->
+      <!-- ══════════════════════════════════════════════════════════ -->
       @if (step() === 'verify') {
-        <div class="ad-pane">
-          <div class="ad-verify-hero">
-            <div class="ad-verify-orb">
+        <div class="relative z-10 flex flex-col gap-5 px-5 pt-6 pb-7 animate-fadeUp">
+          <div class="flex flex-col items-center gap-3 text-center">
+            <div class="w-16 h-16 rounded-[18px] flex items-center justify-center
+                        bg-[rgba(240,180,41,.08)] border border-[rgba(240,180,41,.2)] text-[#F0B429]">
               <svg width="30" height="30" fill="none" stroke="currentColor" stroke-width="1.4" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75"/>
               </svg>
             </div>
-            <h2 class="ad-title">Check your inbox</h2>
-            <p class="ad-sub">We sent a verification code to<br/><strong class="ad-em">{{ pendingEmail() }}</strong></p>
+            <h2 class="text-[1.9rem] leading-none m-0 text-[#F2EEE6]" style="font-family:'Bebas Neue',sans-serif;letter-spacing:.04em">Check your inbox</h2>
+            <p class="text-[.8rem] text-white/40 font-light leading-relaxed m-0">
+              We sent a verification code to<br/>
+              <strong class="text-[#F2EEE6] font-semibold not-italic">{{ pendingEmail() }}</strong>
+            </p>
           </div>
-          <form [formGroup]="verifyForm" (ngSubmit)="onVerify()" class="ad-form">
-            <div class="ad-field">
-              <label class="ad-label">Verification Code *</label>
-              <input z-input formControlName="code" type="text" maxlength="10" placeholder="· · · · · ·" inputmode="numeric" autocomplete="one-time-code" aria-label="Email verification code" class="ad-input ad-input--code"/>
+
+          <form [formGroup]="verifyForm" (ngSubmit)="onVerify()" class="flex flex-col gap-3.5">
+            <div class="flex flex-col gap-1.5">
+              <label class="text-[.72rem] font-semibold text-white/60 tracking-[.01em]">Verification Code *</label>
+              <input z-input formControlName="code" type="text" maxlength="10"
+                     placeholder="· · · · · ·" inputmode="numeric" autocomplete="one-time-code"
+                     aria-label="Email verification code"
+                     [class]="inputClass() + ' font-mono tracking-[.22em] text-[1.05rem] text-center'"/>
             </div>
+
             <ng-container *ngTemplateOutlet="alertsTpl"></ng-container>
-            <button type="submit" class="ad-cta ad-cta--gold" [disabled]="verifyForm.invalid || busy()">
-              <span class="ad-cta-label">
-                @if (busy()) { <span class="ad-spin ad-spin--dark"></span> Verifying… } @else { Verify &amp; Continue }
+
+            <button type="submit" [class]="ctaClass('user')" [disabled]="verifyForm.invalid || busy()">
+              <span class="flex items-center gap-2">
+                @if (busy()) { <span class="spinner spinner-dark"></span> Verifying… }
+                @else { Verify &amp; Continue }
               </span>
-              @if (!busy()) { <span class="ad-cta-arrow">→</span> }
+              @if (!busy()) { <span class="cta-arrow">→</span> }
             </button>
           </form>
-          <p class="ad-footer-text">
-            Wrong email? <button type="button" class="ad-link" (click)="goto('role-selection')">Go back</button>
+
+          <p class="text-center text-[.78rem] text-white/40">
+            Wrong email?
+            <button type="button" class="bg-transparent border-0 p-0 text-[#FF4433] font-semibold cursor-pointer hover:opacity-75 transition-opacity text-[.78rem]" (click)="goto('role-selection')">Go back</button>
           </p>
         </div>
       }
 
-      <!-- ═══ LOGIN: ROLE SELECTION ═══ -->
+      <!-- ══════════════════════════════════════════════════════════ -->
+      <!-- LOGIN: ROLE SELECTION                                      -->
+      <!-- ══════════════════════════════════════════════════════════ -->
       @if (step() === 'login-role-selection') {
-        <div class="ad-pane">
+        <div class="relative z-10 flex flex-col gap-5 px-5 pt-6 pb-7 animate-fadeUp">
           <ng-container *ngTemplateOutlet="brandTpl"></ng-container>
-          <div class="ad-head">
-            <h2 class="ad-title">Welcome back</h2>
-            <p class="ad-sub">Who are you logging in as?</p>
+
+          <div class="flex flex-col gap-1">
+            <h2 class="text-[1.9rem] leading-none m-0 text-[#F2EEE6]" style="font-family:'Bebas Neue',sans-serif;letter-spacing:.04em">
+              Welcome back
+            </h2>
+            <p class="text-[.8rem] text-white/40 font-light m-0">Who are you logging in as?</p>
           </div>
-          <div class="ad-roles">
-            <button type="button" class="ad-role" [class.ad-role--coral]="loginRole() === 'organizer'" (click)="selectLoginRole('organizer')">
-              <ng-container *ngTemplateOutlet="checkTpl; context:{ active: loginRole()==='organizer', gold: false }"></ng-container>
-              <div class="ad-role-icon ad-role-icon--coral">
-                <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" d="M3 7a2 2 0 012-2h14a2 2 0 012 2v12a2 2 0 01-2 2H5a2 2 0 01-2-2V7zM16 3v4M8 3v4M3 11h18"/>
-                </svg>
-              </div>
-              <strong class="ad-role-name">Organizer</strong>
-              <span class="ad-role-hint">Manage events</span>
-            </button>
-            <button type="button" class="ad-role" [class.ad-role--gold]="loginRole() === 'user'" (click)="selectLoginRole('user')">
-              <ng-container *ngTemplateOutlet="checkTpl; context:{ active: loginRole()==='user', gold: true }"></ng-container>
-              <div class="ad-role-icon ad-role-icon--gold">
-                <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z"/>
-                </svg>
-              </div>
-              <strong class="ad-role-name">Attendee</strong>
-              <span class="ad-role-hint">Explore events</span>
-            </button>
-          </div>
-          <p class="ad-footer-text">
-            New here? <button type="button" class="ad-link" (click)="goto('role-selection')">Sign up</button>
+
+          <ng-container *ngTemplateOutlet="rolePairTpl; context:{ selectFn: selectLoginRole, activeRole: loginRole() }"></ng-container>
+
+          <p class="text-center text-[.78rem] text-white/40">
+            New here?
+            <button type="button" class="bg-transparent border-0 p-0 text-[#FF4433] font-semibold cursor-pointer hover:opacity-75 transition-opacity text-[.78rem]" (click)="goto('role-selection')">Sign up</button>
           </p>
         </div>
       }
 
-      <!-- ═══ LOGIN: FORM ═══ -->
+      <!-- ══════════════════════════════════════════════════════════ -->
+      <!-- LOGIN: FORM                                                -->
+      <!-- ══════════════════════════════════════════════════════════ -->
       @if (step() === 'login') {
-        <div class="ad-pane">
+        <div class="relative z-10 flex flex-col gap-5 px-5 pt-6 pb-7 animate-fadeUp">
           <ng-container *ngTemplateOutlet="backTpl; context:{ target: 'login-role-selection' }"></ng-container>
-          <div class="ad-head">
-            <span class="ad-badge" [class.ad-badge--gold]="loginRole()==='user'">
+
+          <div class="flex flex-col gap-1">
+            <span [class]="badgeClass(loginRole())">
               {{ loginRole()==='organizer' ? 'Organizer' : 'Attendee' }}
             </span>
-            <h2 class="ad-title">Sign in</h2>
+            <h2 class="text-[1.9rem] leading-none m-0 text-[#F2EEE6]" style="font-family:'Bebas Neue',sans-serif;letter-spacing:.04em">
+              Sign in
+            </h2>
           </div>
-          <form [formGroup]="loginForm" (ngSubmit)="onLogin()" class="ad-form">
-            <div class="ad-field">
-              <label class="ad-label">Email</label>
-              <input z-input formControlName="email" type="email" placeholder="you@example.com" autocomplete="email" class="ad-input"/>
+
+          <form [formGroup]="loginForm" (ngSubmit)="onLogin()" class="flex flex-col gap-3.5">
+            <div class="flex flex-col gap-1.5">
+              <label class="text-[.72rem] font-semibold text-white/60 tracking-[.01em]">Email</label>
+              <input z-input formControlName="email" type="email" placeholder="you@example.com"
+                     autocomplete="email" [class]="inputClass()"/>
             </div>
-            <div class="ad-field">
-              <div class="ad-label-row">
-                <label class="ad-label">Password</label>
-                <button type="button" class="ad-link ad-link--sm" (click)="goto('forgot-password')">Forgot?</button>
+
+            <div class="flex flex-col gap-1.5">
+              <div class="flex items-center justify-between">
+                <label class="text-[.72rem] font-semibold text-white/60 tracking-[.01em]">Password</label>
+                <button type="button"
+                        class="bg-transparent border-0 p-0 text-[.72rem] font-medium text-[#FF4433] cursor-pointer hover:opacity-75 transition-opacity"
+                        (click)="goto('forgot-password')">Forgot?</button>
               </div>
-              <input z-input formControlName="password" type="password" placeholder="Your password" autocomplete="current-password" class="ad-input"/>
+              <input z-input formControlName="password" type="password" placeholder="Your password"
+                     autocomplete="current-password" [class]="inputClass()"/>
             </div>
+
             <ng-container *ngTemplateOutlet="alertsTpl"></ng-container>
-            <button type="submit" class="ad-cta" [class.ad-cta--gold]="loginRole()==='user'" [disabled]="loginForm.invalid || busy()">
-              <span class="ad-cta-label">
-                @if (busy()) { <span class="ad-spin"></span> Signing in… }
+
+            <button type="submit" [class]="ctaClass(loginRole())" [disabled]="loginForm.invalid || busy()">
+              <span class="flex items-center gap-2">
+                @if (busy()) { <span class="spinner" [class.spinner-dark]="loginRole()==='user'"></span> Signing in… }
                 @else { Sign in as {{ loginRole()==='organizer' ? 'Organizer' : 'Attendee' }} }
               </span>
-              @if (!busy()) { <span class="ad-cta-arrow">→</span> }
+              @if (!busy()) { <span class="cta-arrow">→</span> }
             </button>
           </form>
-          <p class="ad-footer-text">
-            No account? <button type="button" class="ad-link" (click)="goto('role-selection')">Sign up</button>
+
+          <p class="text-center text-[.78rem] text-white/40">
+            No account?
+            <button type="button" class="bg-transparent border-0 p-0 text-[#FF4433] font-semibold cursor-pointer hover:opacity-75 transition-opacity text-[.78rem]" (click)="goto('role-selection')">Sign up</button>
           </p>
         </div>
       }
 
-      <!-- ═══ FORGOT PASSWORD ═══ -->
+      <!-- ══════════════════════════════════════════════════════════ -->
+      <!-- FORGOT PASSWORD                                            -->
+      <!-- ══════════════════════════════════════════════════════════ -->
       @if (step() === 'forgot-password') {
-        <div class="ad-pane">
+        <div class="relative z-10 flex flex-col gap-5 px-5 pt-6 pb-7 animate-fadeUp">
           <ng-container *ngTemplateOutlet="backTpl; context:{ target: 'login' }"></ng-container>
-          <div class="ad-head">
-            <h2 class="ad-title">Forgot password</h2>
-            <p class="ad-sub">Enter your email and we'll send reset instructions</p>
+
+          <div class="flex flex-col gap-1">
+            <h2 class="text-[1.9rem] leading-none m-0 text-[#F2EEE6]" style="font-family:'Bebas Neue',sans-serif;letter-spacing:.04em">Forgot password</h2>
+            <p class="text-[.8rem] text-white/40 font-light m-0">Enter your email and we'll send reset instructions</p>
           </div>
-          <form [formGroup]="forgotForm" (ngSubmit)="onForgot()" class="ad-form">
-            <div class="ad-field">
-              <label class="ad-label">Email</label>
-              <input z-input formControlName="email" type="email" placeholder="you@example.com" autocomplete="email" class="ad-input"/>
+
+          <form [formGroup]="forgotForm" (ngSubmit)="onForgot()" class="flex flex-col gap-3.5">
+            <div class="flex flex-col gap-1.5">
+              <label class="text-[.72rem] font-semibold text-white/60 tracking-[.01em]">Email</label>
+              <input z-input formControlName="email" type="email" placeholder="you@example.com"
+                     autocomplete="email" [class]="inputClass()"/>
             </div>
+
             <ng-container *ngTemplateOutlet="alertsTpl"></ng-container>
-            <button type="submit" class="ad-cta" [disabled]="forgotForm.invalid || busy()">
-              <span class="ad-cta-label">
-                @if (busy()) { <span class="ad-spin"></span> Sending… } @else { Send Reset Link }
+
+            <button type="submit" [class]="ctaClass('organizer')" [disabled]="forgotForm.invalid || busy()">
+              <span class="flex items-center gap-2">
+                @if (busy()) { <span class="spinner"></span> Sending… }
+                @else { Send Reset Link }
               </span>
-              @if (!busy()) { <span class="ad-cta-arrow">→</span> }
+              @if (!busy()) { <span class="cta-arrow">→</span> }
             </button>
           </form>
         </div>
       }
 
-      <!-- ═══ RESET PASSWORD ═══ -->
+      <!-- ══════════════════════════════════════════════════════════ -->
+      <!-- RESET PASSWORD                                             -->
+      <!-- ══════════════════════════════════════════════════════════ -->
       @if (step() === 'reset-password') {
-        <div class="ad-pane">
+        <div class="relative z-10 flex flex-col gap-5 px-5 pt-6 pb-7 animate-fadeUp">
           <ng-container *ngTemplateOutlet="backTpl; context:{ target: 'login' }"></ng-container>
-          <div class="ad-head">
-            <h2 class="ad-title">Reset password</h2>
-            <p class="ad-sub">Enter the token sent to your inbox</p>
+
+          <div class="flex flex-col gap-1">
+            <h2 class="text-[1.9rem] leading-none m-0 text-[#F2EEE6]" style="font-family:'Bebas Neue',sans-serif;letter-spacing:.04em">Reset password</h2>
+            <p class="text-[.8rem] text-white/40 font-light m-0">Enter the token sent to your inbox</p>
           </div>
-          <form [formGroup]="resetForm" (ngSubmit)="onReset()" class="ad-form">
-            <div class="ad-field">
-              <label class="ad-label">Email</label>
-              <input z-input formControlName="email" type="email" autocomplete="email" class="ad-input"/>
+
+          <form [formGroup]="resetForm" (ngSubmit)="onReset()" class="flex flex-col gap-3.5">
+            <div class="flex flex-col gap-1.5">
+              <label class="text-[.72rem] font-semibold text-white/60 tracking-[.01em]">Email</label>
+              <input z-input formControlName="email" type="email" autocomplete="email" [class]="inputClass()"/>
             </div>
-            <div class="ad-field">
-              <label class="ad-label">Reset Token</label>
-              <input z-input formControlName="token" type="text" autocomplete="one-time-code" aria-label="Password reset token" class="ad-input ad-input--code"/>
+            <div class="flex flex-col gap-1.5">
+              <label class="text-[.72rem] font-semibold text-white/60 tracking-[.01em]">Reset Token</label>
+              <input z-input formControlName="token" type="text" autocomplete="one-time-code"
+                     aria-label="Password reset token"
+                     [class]="inputClass() + ' font-mono tracking-[.22em] text-center'"/>
             </div>
-            <div class="ad-field">
-              <label class="ad-label">New Password</label>
-              <input z-input formControlName="newPassword" type="password" autocomplete="new-password" class="ad-input"/>
+            <div class="flex flex-col gap-1.5">
+              <label class="text-[.72rem] font-semibold text-white/60 tracking-[.01em]">New Password</label>
+              <input z-input formControlName="newPassword" type="password" autocomplete="new-password" [class]="inputClass()"/>
             </div>
+
             <ng-container *ngTemplateOutlet="alertsTpl"></ng-container>
-            <button type="submit" class="ad-cta" [disabled]="resetForm.invalid || busy()">
-              <span class="ad-cta-label">
-                @if (busy()) { <span class="ad-spin"></span> Resetting… } @else { Reset Password }
+
+            <button type="submit" [class]="ctaClass('organizer')" [disabled]="resetForm.invalid || busy()">
+              <span class="flex items-center gap-2">
+                @if (busy()) { <span class="spinner"></span> Resetting… }
+                @else { Reset Password }
               </span>
-              @if (!busy()) { <span class="ad-cta-arrow">→</span> }
+              @if (!busy()) { <span class="cta-arrow">→</span> }
             </button>
           </form>
         </div>
       }
 
-      <!-- ══════════════ SHARED TEMPLATES ══════════════ -->
+      <!-- ══════════════════════════════════════════════════════════ -->
+      <!-- SHARED TEMPLATES                                           -->
+      <!-- ══════════════════════════════════════════════════════════ -->
+
+      <!-- Brand -->
       <ng-template #brandTpl>
-        <div class="ad-brand">
-          <div class="ad-brand-ring">
+        <div class="flex items-center gap-2.5">
+          <div class="w-[30px] h-[30px] rounded-full flex-shrink-0 flex items-center justify-center
+                      border border-[rgba(255,68,51,.35)] bg-[rgba(255,68,51,.08)] text-[#FF4433]">
             <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.6" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" d="M6 2v4M18 2v4M3 10h18M3 6a2 2 0 012-2h14a2 2 0 012 2v14a2 2 0 01-2 2H5a2 2 0 01-2-2V6z"/>
             </svg>
           </div>
-          <span class="ad-brand-name">Eventsora</span>
+          <span class="text-[1.15rem] tracking-[.08em] text-[#F2EEE6]" style="font-family:'Bebas Neue',sans-serif">Eventsora</span>
         </div>
       </ng-template>
 
+      <!-- Back button -->
       <ng-template #backTpl let-target="target">
-        <button type="button" (click)="goto(target)" class="ad-back">
+        <button type="button" (click)="goto(target)"
+                class="inline-flex items-center gap-1.5 bg-transparent border-0 p-0 min-h-[28px]
+                       text-[.74rem] font-medium text-white/40 cursor-pointer w-fit
+                       hover:text-[#F2EEE6] transition-colors duration-200">
           <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" d="M19 12H5M12 5l-7 7 7 7"/>
           </svg>
@@ -333,18 +412,75 @@ type Step =
         </button>
       </ng-template>
 
-      <ng-template #checkTpl let-active="active" let-gold="gold">
-        <div class="ad-role-check" [class.ad-role-check--gold]="gold" [class.ad-role-check--visible]="active">
-          <svg width="10" height="10" fill="none" stroke="currentColor" stroke-width="2.8" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
-          </svg>
+      <!-- Role pair (reused for both register & login) -->
+      <ng-template #rolePairTpl let-selectFn="selectFn" let-activeRole="activeRole">
+        <div class="grid grid-cols-2 gap-3">
+          <!-- Organizer -->
+          <button type="button"
+                  (click)="selectFn('organizer')"
+                  class="relative flex flex-col items-center gap-2.5 py-[18px] px-3.5 rounded-[14px]
+                         bg-[#111116] cursor-pointer text-center
+                         transition-all duration-200 hover:-translate-y-0.5 border
+                         -webkit-tap-highlight-color-transparent"
+                  [style.border-color]="activeRole==='organizer' ? 'rgba(255,68,51,.55)' : 'rgba(242,238,230,.08)'"
+                  [style.background]="activeRole==='organizer' ? 'rgba(255,68,51,.05)' : ''"
+                  [style.box-shadow]="activeRole==='organizer' ? '0 0 24px rgba(255,68,51,.12)' : ''">
+            <!-- Check badge -->
+            <div class="absolute top-2 right-2 w-5 h-5 rounded-full flex items-center justify-center
+                        bg-[#FF4433] text-white transition-all duration-200"
+                 [style.opacity]="activeRole==='organizer' ? '1' : '0'"
+                 [style.transform]="activeRole==='organizer' ? 'scale(1)' : 'scale(.5)'">
+              <svg width="10" height="10" fill="none" stroke="currentColor" stroke-width="2.8" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
+              </svg>
+            </div>
+            <div class="w-11 h-11 rounded-[12px] flex items-center justify-center
+                        bg-[rgba(255,68,51,.1)] border border-[rgba(255,68,51,.18)] text-[#FF4433]">
+              <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M3 7a2 2 0 012-2h14a2 2 0 012 2v12a2 2 0 01-2 2H5a2 2 0 01-2-2V7zM16 3v4M8 3v4M3 11h18"/>
+              </svg>
+            </div>
+            <strong class="text-[.95rem] tracking-[.04em] text-[#F2EEE6]" style="font-family:'Bebas Neue',sans-serif">Organizer</strong>
+            <span class="text-[.66rem] text-white/40 font-light leading-snug">Create &amp; manage events</span>
+          </button>
+
+          <!-- Attendee -->
+          <button type="button"
+                  (click)="selectFn('user')"
+                  class="relative flex flex-col items-center gap-2.5 py-[18px] px-3.5 rounded-[14px]
+                         bg-[#111116] cursor-pointer text-center
+                         transition-all duration-200 hover:-translate-y-0.5 border"
+                  [style.border-color]="activeRole==='user' ? 'rgba(240,180,41,.55)' : 'rgba(242,238,230,.08)'"
+                  [style.background]="activeRole==='user' ? 'rgba(240,180,41,.05)' : ''"
+                  [style.box-shadow]="activeRole==='user' ? '0 0 24px rgba(240,180,41,.1)' : ''">
+            <!-- Check badge -->
+            <div class="absolute top-2 right-2 w-5 h-5 rounded-full flex items-center justify-center
+                        bg-[#F0B429] text-[#1a1200] transition-all duration-200"
+                 [style.opacity]="activeRole==='user' ? '1' : '0'"
+                 [style.transform]="activeRole==='user' ? 'scale(1)' : 'scale(.5)'">
+              <svg width="10" height="10" fill="none" stroke="currentColor" stroke-width="2.8" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
+              </svg>
+            </div>
+            <div class="w-11 h-11 rounded-[12px] flex items-center justify-center
+                        bg-[rgba(240,180,41,.1)] border border-[rgba(240,180,41,.18)] text-[#F0B429]">
+              <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z"/>
+              </svg>
+            </div>
+            <strong class="text-[.95rem] tracking-[.04em] text-[#F2EEE6]" style="font-family:'Bebas Neue',sans-serif">Attendee</strong>
+            <span class="text-[.66rem] text-white/40 font-light leading-snug">Discover &amp; book events</span>
+          </button>
         </div>
       </ng-template>
 
+      <!-- Alerts -->
       <ng-template #alertsTpl>
         @if (err()) {
-          <div role="alert" class="ad-alert ad-alert--err">
-            <svg class="ad-alert-icon" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <div role="alert"
+               class="flex items-start gap-2 px-3.5 py-2.5 rounded-[9px] text-[.78rem] leading-relaxed
+                      bg-[rgba(255,68,51,.1)] border border-[rgba(255,68,51,.22)] text-[#ff7060]">
+            <svg class="flex-shrink-0 mt-0.5" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
               <circle cx="12" cy="12" r="10"/>
               <path stroke-linecap="round" d="M12 8v4M12 16h.01"/>
             </svg>
@@ -352,8 +488,10 @@ type Step =
           </div>
         }
         @if (ok()) {
-          <div role="status" class="ad-alert ad-alert--ok">
-            <svg class="ad-alert-icon" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <div role="status"
+               class="flex items-start gap-2 px-3.5 py-2.5 rounded-[9px] text-[.78rem] leading-relaxed
+                      bg-[rgba(34,197,94,.08)] border border-[rgba(34,197,94,.2)] text-[#4ade80]">
+            <svg class="flex-shrink-0 mt-0.5" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
             </svg>
             {{ ok() }}
@@ -364,81 +502,41 @@ type Step =
     </div>
   `,
   styles: [`
-    :host {
-      --coral: #FF4433; --gold: #F0B429; --bg: #09090c; --bg2: #111116;
-      --text: #F2EEE6; --muted: rgba(242,238,230,.42);
-      --bdr: rgba(242,238,230,.08); --bdrhi: rgba(242,238,230,.15);
-      display: block; font-family: 'Plus Jakarta Sans', sans-serif;
+    :host { display: block; font-family: 'Plus Jakarta Sans', sans-serif; }
+
+    /* Grain texture via CSS only — never in template HTML */
+    .grain-bg {
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.05'/%3E%3C/svg%3E");
     }
-    .ad-shell { position: relative; width: 100%; background: var(--bg); color: var(--text); overflow: hidden; border-radius: 18px; }
-    .ad-glow { pointer-events: none; position: absolute; top: -80px; left: -60px; width: 280px; height: 280px; border-radius: 50%; background: radial-gradient(circle, rgba(255,68,51,.07) 0%, transparent 70%); z-index: 0; }
-    .ad-grain { pointer-events: none; position: absolute; inset: 0; opacity: .45; z-index: 0; background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.05'/%3E%3C/svg%3E"); }
-    .ad-close { position: absolute; top: 14px; right: 14px; z-index: 20; width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,.05); border: none; cursor: pointer; color: rgba(255,255,255,.4); transition: background .15s, color .15s; }
-    .ad-close:hover { background: rgba(255,255,255,.1); color: rgba(255,255,255,.75); }
-    .ad-pane { position: relative; z-index: 1; display: flex; flex-direction: column; gap: 20px; padding: 24px 22px 28px; animation: fadeUp .28s cubic-bezier(.22,1,.36,1) both; }
-    @keyframes fadeUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-    .ad-brand { display: flex; align-items: center; gap: 9px; }
-    .ad-brand-ring { width: 30px; height: 30px; border-radius: 50%; flex-shrink: 0; border: 1.5px solid rgba(255,68,51,.35); background: rgba(255,68,51,.08); color: var(--coral); display: flex; align-items: center; justify-content: center; }
-    .ad-brand-name { font-family: 'Bebas Neue', sans-serif; font-size: 1.15rem; letter-spacing: .08em; color: var(--text); }
-    .ad-progress-wrap { display: flex; flex-direction: column; gap: 5px; }
-    .ad-progress-track { width: 100%; height: 3px; border-radius: 99px; background: rgba(255,255,255,.06); }
-    .ad-progress-fill { height: 100%; border-radius: 99px; background: var(--coral); transition: width .5s ease; }
-    .ad-progress-fill--gold { background: var(--gold); }
-    .ad-step-label { font-family: 'DM Mono', monospace; font-size: .57rem; letter-spacing: .14em; text-transform: uppercase; color: rgba(242,238,230,.3); }
-    .ad-head { display: flex; flex-direction: column; gap: 5px; }
-    .ad-title { font-family: 'Bebas Neue', sans-serif; font-size: 1.9rem; letter-spacing: .04em; line-height: 1; margin: 0; color: var(--text); }
-    .ad-sub  { font-size: .8rem; color: var(--muted); font-weight: 300; line-height: 1.65; margin: 0; }
-    .ad-em   { color: var(--text); font-weight: 600; font-style: normal; }
-    .ad-badge { display: inline-flex; align-items: center; width: fit-content; padding: 3px 10px; border-radius: 99px; margin-bottom: 4px; background: rgba(255,68,51,.1); border: 1px solid rgba(255,68,51,.25); font-family: 'DM Mono', monospace; font-size: .6rem; letter-spacing: .1em; text-transform: uppercase; color: var(--coral); }
-    .ad-badge--gold { background: rgba(240,180,41,.1); border-color: rgba(240,180,41,.25); color: var(--gold); }
-    .ad-roles { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-    .ad-role { position: relative; display: flex; flex-direction: column; align-items: center; gap: 9px; padding: 18px 14px 16px; background: var(--bg2); border: 1px solid var(--bdr); border-radius: 14px; cursor: pointer; text-align: center; transition: border-color .2s, background .2s, transform .18s, box-shadow .2s; -webkit-tap-highlight-color: transparent; }
-    .ad-role:hover { border-color: var(--bdrhi); transform: translateY(-2px); }
-    .ad-role--coral { border-color: rgba(255,68,51,.55) !important; background: rgba(255,68,51,.05) !important; box-shadow: 0 0 24px rgba(255,68,51,.12); }
-    .ad-role--gold  { border-color: rgba(240,180,41,.55) !important; background: rgba(240,180,41,.05) !important; box-shadow: 0 0 24px rgba(240,180,41,.1); }
-    .ad-role-check { position: absolute; top: 8px; right: 8px; width: 20px; height: 20px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: var(--coral); color: #fff; opacity: 0; transform: scale(.5); transition: opacity .2s, transform .2s; }
-    .ad-role-check--gold    { background: var(--gold); color: #1a1200; }
-    .ad-role-check--visible { opacity: 1; transform: scale(1); }
-    .ad-role-icon { width: 44px; height: 44px; border-radius: 12px; display: flex; align-items: center; justify-content: center; }
-    .ad-role-icon--coral { background: rgba(255,68,51,.1); border: 1px solid rgba(255,68,51,.18); color: var(--coral); }
-    .ad-role-icon--gold  { background: rgba(240,180,41,.1); border: 1px solid rgba(240,180,41,.18); color: var(--gold); }
-    .ad-role-name { font-family: 'Bebas Neue', sans-serif; font-size: .95rem; letter-spacing: .04em; color: var(--text); }
-    .ad-role-hint { font-size: .66rem; color: var(--muted); font-weight: 300; line-height: 1.35; }
-    .ad-verify-hero { display: flex; flex-direction: column; align-items: center; gap: 12px; text-align: center; }
-    .ad-verify-orb { width: 64px; height: 64px; border-radius: 18px; display: flex; align-items: center; justify-content: center; background: rgba(240,180,41,.08); border: 1px solid rgba(240,180,41,.2); color: var(--gold); }
-    .ad-form      { display: flex; flex-direction: column; gap: 13px; }
-    .ad-field     { display: flex; flex-direction: column; gap: 6px; }
-    .ad-row       { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-    .ad-label-row { display: flex; align-items: center; justify-content: space-between; }
-    .ad-label     { font-size: .72rem; font-weight: 600; color: rgba(242,238,230,.62); letter-spacing: .01em; }
-    .ad-ferr      { font-size: .68rem; color: var(--coral); }
-    .ad-input { width: 100%; box-sizing: border-box; background: var(--bg2) !important; border: 1px solid var(--bdr) !important; border-radius: 9px !important; color: var(--text) !important; font-family: 'Plus Jakarta Sans', sans-serif !important; font-size: .88rem !important; padding: .65rem .9rem !important; outline: none !important; transition: border-color .2s, box-shadow .2s !important; }
-    .ad-input:focus { border-color: rgba(255,68,51,.5) !important; box-shadow: 0 0 0 3px rgba(255,68,51,.08) !important; }
-    .ad-input::placeholder { color: rgba(242,238,230,.22) !important; }
-    .ad-input--code { font-family: 'DM Mono', monospace !important; letter-spacing: .22em !important; font-size: 1.05rem !important; text-align: center !important; }
-    .ad-cta { width: 100%; display: flex; align-items: center; justify-content: space-between; padding: .78rem 1rem .78rem 1.25rem; border: none; border-radius: 12px; background: var(--coral); color: #fff; font-family: 'Plus Jakarta Sans', sans-serif; font-weight: 700; font-size: .9rem; cursor: pointer; position: relative; overflow: hidden; box-shadow: 0 0 28px rgba(255,68,51,.22); transition: box-shadow .25s, transform .18s, opacity .2s; }
-    .ad-cta::before { content: ''; position: absolute; inset: 0; background: linear-gradient(135deg, rgba(255,255,255,.14) 0%, transparent 55%); pointer-events: none; }
-    .ad-cta:hover:not(:disabled) { box-shadow: 0 0 48px rgba(255,68,51,.42); transform: translateY(-1px); }
-    .ad-cta:disabled { opacity: .42; cursor: not-allowed; }
-    .ad-cta--gold { background: var(--gold); color: #1a1200; box-shadow: 0 0 28px rgba(240,180,41,.22); }
-    .ad-cta--gold:hover:not(:disabled) { box-shadow: 0 0 48px rgba(240,180,41,.42); }
-    .ad-cta-label { display: flex; align-items: center; gap: 8px; }
-    .ad-cta-arrow { width: 28px; height: 28px; border-radius: 8px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,.2); font-size: 1rem; transition: transform .2s; }
-    .ad-cta:hover:not(:disabled) .ad-cta-arrow { transform: translateX(3px); }
-    .ad-alert { display: flex; align-items: flex-start; gap: 8px; padding: .6rem .85rem; border-radius: 9px; font-size: .78rem; line-height: 1.5; }
-    .ad-alert--err { background: rgba(255,68,51,.1); border: 1px solid rgba(255,68,51,.22); color: #ff7060; }
-    .ad-alert--ok  { background: rgba(34,197,94,.08); border: 1px solid rgba(34,197,94,.2);  color: #4ade80; }
-    .ad-alert-icon { flex-shrink: 0; margin-top: 1px; }
-    .ad-back { display: inline-flex; align-items: center; gap: 5px; background: none; border: none; padding: 0; min-height: 28px; font-size: .74rem; font-weight: 500; color: var(--muted); cursor: pointer; width: fit-content; transition: color .2s; }
-    .ad-back:hover { color: var(--text); }
-    .ad-link { background: none; border: none; padding: 0; color: var(--coral); font-weight: 600; font-size: inherit; cursor: pointer; transition: opacity .2s; }
-    .ad-link:hover { opacity: .75; }
-    .ad-link--sm { font-size: .72rem; font-weight: 500; }
-    .ad-footer-text { text-align: center; font-size: .78rem; color: var(--muted); }
-    .ad-spin { display: inline-block; width: 14px; height: 14px; border-radius: 50%; border: 2px solid rgba(255,255,255,.28); border-top-color: #fff; animation: spin .7s linear infinite; }
-    .ad-spin--dark { border-color: rgba(0,0,0,.2); border-top-color: #1a1200; }
+
+    /* Pane entrance animation */
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(10px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .animate-fadeUp { animation: fadeUp .28s cubic-bezier(.22,1,.36,1) both; }
+
+    /* CTA button shared chrome */
+    .cta-arrow {
+      width: 28px; height: 28px; border-radius: 8px; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+      background: rgba(255,255,255,.2); font-size: 1rem;
+      transition: transform .2s;
+    }
+
+    /* Spinner */
     @keyframes spin { to { transform: rotate(360deg); } }
-    @media (max-width: 360px) { .ad-row { grid-template-columns: 1fr; } }
+    .spinner {
+      display: inline-block; width: 14px; height: 14px; border-radius: 50%;
+      border: 2px solid rgba(255,255,255,.28); border-top-color: #fff;
+      animation: spin .7s linear infinite; flex-shrink: 0;
+    }
+    .spinner-dark { border-color: rgba(0,0,0,.2); border-top-color: #1a1200; }
+
+    /* Responsive: single-col name row on very small screens */
+    @media (max-width: 360px) {
+      .grid-cols-2-name { grid-template-columns: 1fr !important; }
+    }
   `],
 })
 export class AuthDialog implements OnInit, OnDestroy {
@@ -480,6 +578,42 @@ export class AuthDialog implements OnInit, OnDestroy {
     this.timers.push(id);
   }
 
+  // ── Helper: Tailwind class strings ──────────────────────────────
+
+  inputClass(): string {
+    return [
+      'w-full box-border',
+      'bg-[#111116] border border-[rgba(242,238,230,.08)] rounded-[9px]',
+      'text-[#F2EEE6] text-[.88rem] placeholder:text-white/20',
+      'px-[.9rem] py-[.65rem] outline-none',
+      'transition-all duration-200',
+      'focus:border-[rgba(255,68,51,.5)] focus:shadow-[0_0_0_3px_rgba(255,68,51,.08)]',
+    ].join(' ');
+  }
+
+  badgeClass(role: UserRole): string {
+    const base = 'inline-flex items-center w-fit px-2.5 py-[3px] rounded-full mb-1 text-[.6rem] tracking-[.1em] uppercase border';
+    return role === 'user'
+      ? `${base} bg-[rgba(240,180,41,.1)] border-[rgba(240,180,41,.25)] text-[#F0B429]`
+      : `${base} bg-[rgba(255,68,51,.1)] border-[rgba(255,68,51,.25)] text-[#FF4433]`;
+  }
+
+  ctaClass(role: UserRole): string {
+    const base = [
+      'w-full flex items-center justify-between',
+      'px-5 py-[.78rem] border-0 rounded-[12px]',
+      'font-bold text-[.9rem] cursor-pointer relative overflow-hidden',
+      'transition-all duration-200',
+      'disabled:opacity-40 disabled:cursor-not-allowed',
+      'hover:not([disabled]):-translate-y-px',
+    ].join(' ');
+    return role === 'user'
+      ? `${base} bg-[#F0B429] text-[#1a1200] shadow-[0_0_28px_rgba(240,180,41,.22)] hover:shadow-[0_0_48px_rgba(240,180,41,.42)]`
+      : `${base} bg-[#FF4433] text-white shadow-[0_0_28px_rgba(255,68,51,.22)] hover:shadow-[0_0_48px_rgba(255,68,51,.42)]`;
+  }
+
+  // ── Forms ────────────────────────────────────────────────────────
+
   private buildForms() {
     this.verifyForm = this.fb.group({ code: ['', Validators.required] });
     this.loginForm  = this.fb.group({
@@ -515,9 +649,13 @@ export class AuthDialog implements OnInit, OnDestroy {
   goto(s: Step)   { this.step.set(s); this.err.set(''); this.ok.set(''); }
   private clear() { this.err.set(''); this.ok.set(''); }
 
-  selectRegRole(r: UserRole)   { this.regRole.set(r); this.buildRegisterForm(); this.goto('register'); }
-  selectLoginRole(r: UserRole) { this.loginRole.set(r); this.goto('login'); }
+  // selectLoginRole / selectRegRole both just set the role and navigate.
+  // Using arrow-function properties so they can be passed into ng-template
+  // context without losing `this` binding.
+  selectRegRole   = (r: UserRole) => { this.regRole.set(r); this.buildRegisterForm(); this.goto('register'); };
+  selectLoginRole = (r: UserRole) => { this.loginRole.set(r); this.goto('login'); };
 
+  /* ── Register ── */
   onRegister() {
     if (this.registerForm.invalid || this.busy()) return;
     this.busy.set(true); this.clear();
@@ -532,7 +670,11 @@ export class AuthDialog implements OnInit, OnDestroy {
             this.after(1200, () => this.goto('verify'));
           } else {
             this.ok.set('Organizer account created! Please sign in.');
-            this.after(1500, () => { this.loginRole.set('organizer'); this.loginForm.patchValue({ email }); this.goto('login'); });
+            this.after(1500, () => {
+              this.loginRole.set('organizer');
+              this.loginForm.patchValue({ email });
+              this.goto('login');
+            });
           }
         } else { this.err.set(r.message || 'Registration failed'); }
       },
@@ -540,22 +682,31 @@ export class AuthDialog implements OnInit, OnDestroy {
     });
   }
 
+  /* ── Verify ── */
   onVerify() {
     if (this.verifyForm.invalid || this.busy()) return;
     this.busy.set(true); this.clear();
-    const dto: VerifyAccountDto = { email: this.pendingEmail(), code: this.verifyForm.get('code')!.value };
+    const dto: VerifyAccountDto = {
+      email: this.pendingEmail(),
+      code:  this.verifyForm.get('code')!.value,
+    };
     this.auth.verifyAccount(dto).subscribe({
       next: r => {
         this.busy.set(false);
         if (r.success) {
           this.ok.set('Email verified! Redirecting to sign in…');
-          this.after(1200, () => { this.loginRole.set('user'); this.loginForm.patchValue({ email: this.pendingEmail() }); this.goto('login'); });
+          this.after(1200, () => {
+            this.loginRole.set('user');
+            this.loginForm.patchValue({ email: this.pendingEmail() });
+            this.goto('login');
+          });
         } else { this.err.set(r.message || 'Verification failed'); }
       },
       error: e => { this.busy.set(false); this.err.set(e?.error?.message || 'Invalid or expired code'); },
     });
   }
 
+  /* ── Login ── */
   onLogin() {
     if (this.loginForm.invalid || this.busy()) return;
     this.busy.set(true); this.clear();
@@ -577,6 +728,7 @@ export class AuthDialog implements OnInit, OnDestroy {
     });
   }
 
+  /* ── Forgot ── */
   onForgot() {
     if (this.forgotForm.invalid || this.busy()) return;
     this.busy.set(true); this.clear();
@@ -585,13 +737,17 @@ export class AuthDialog implements OnInit, OnDestroy {
         this.busy.set(false);
         if (r.success) {
           this.ok.set('Reset link sent! Check your inbox.');
-          this.after(2500, () => { this.resetForm.patchValue({ email: this.forgotForm.get('email')!.value }); this.goto('reset-password'); });
+          this.after(2500, () => {
+            this.resetForm.patchValue({ email: this.forgotForm.get('email')!.value });
+            this.goto('reset-password');
+          });
         } else { this.err.set(r.message || 'Failed to send reset link'); }
       },
       error: e => { this.busy.set(false); this.err.set(e?.error?.message || 'Failed'); },
     });
   }
 
+  /* ── Reset ── */
   onReset() {
     if (this.resetForm.invalid || this.busy()) return;
     this.busy.set(true); this.clear();
@@ -600,7 +756,10 @@ export class AuthDialog implements OnInit, OnDestroy {
         this.busy.set(false);
         if (r.success) {
           this.ok.set('Password reset! You can now sign in.');
-          this.after(2000, () => { this.loginForm.patchValue({ email: this.resetForm.get('email')!.value }); this.goto('login'); });
+          this.after(2000, () => {
+            this.loginForm.patchValue({ email: this.resetForm.get('email')!.value });
+            this.goto('login');
+          });
         } else { this.err.set(r.message || 'Reset failed'); }
       },
       error: e => { this.busy.set(false); this.err.set(e?.error?.message || 'Reset failed'); },
