@@ -50,7 +50,7 @@ export class DarkModeService implements OnDestroy {
     this.applyTheme(stored ?? EThemeModes.SYSTEM);
   }
 
-  // ✅ FIXED: Toggle theme properly
+  // FIXED: Toggle theme properly
   toggleTheme(): void {
     if (!this.isBrowser) return;
 
@@ -70,7 +70,7 @@ export class DarkModeService implements OnDestroy {
     );
   }
 
-  // ✅ NEW: Set specific theme
+  // NEW: Set specific theme
   setTheme(theme: ThemeOptions): void {
     if (!this.isBrowser) return;
     this.applyTheme(theme);
@@ -130,7 +130,7 @@ export class DarkModeService implements OnDestroy {
     return isDarkMode ? EThemeModes.DARK : EThemeModes.LIGHT;
   }
 
-  // ✅ NEW: Get actual current mode (not just setting)
+  // NEW: Get actual current mode (not just setting)
   isCurrentlyDark(): boolean {
     return this.isDarkMode();
   }

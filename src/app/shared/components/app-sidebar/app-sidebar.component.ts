@@ -36,7 +36,7 @@ export interface MenuItem {
   standalone: true,
 })
 export class AppSidebarComponent {
-  // 👇 Default to true → collapsed by default (mobile‑first)
+  //  Default to true → collapsed by default (mobile‑first)
   collapsed = input<boolean>(true);
   collapsedChange = output<boolean>();
 
@@ -84,6 +84,11 @@ export class AppSidebarComponent {
       icon: 'ticket' as ZardIcon,
       label: 'Tickets',
       route: '/tickets',
+    },
+    {
+      icon: 'badge-check' as ZardIcon,
+      label: 'Verify Ticket',
+      route: '/verify-ticket',
     },
     {
       icon: 'users' as ZardIcon,

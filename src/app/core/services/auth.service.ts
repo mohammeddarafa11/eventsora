@@ -118,7 +118,7 @@ export class AuthService {
 
   private setAuthData(r: AuthResponse, role: UserRole): void {
     const token = typeof r.data === 'string' ? r.data : (r.data as any)?.token || r.token;
-    if (!token) { console.warn('⚠ No token in response'); return; }
+    if (!token) { console.warn('No token in response'); return; }
     localStorage.setItem('auth_token', token);
     localStorage.setItem('auth_role', role);
     this.authState.next(true);

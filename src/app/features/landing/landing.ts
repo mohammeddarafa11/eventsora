@@ -199,7 +199,7 @@ interface Step        { title: string; desc: string; }
                 <div class="es-bento__grad" aria-hidden="true"></div>
               </div>
               <div class="es-bento__body">
-                <div class="es-bento__tags"><span class="es-tag es-tag--fire">🔥 Trending</span><span class="es-tag">Music</span></div>
+                <div class="es-bento__tags"><span class="es-tag es-tag--fire">Trending</span><span class="es-tag">Music</span></div>
                 <h3 class="es-bento__title">SOUNDSTORM<br/>Giza Edition</h3>
                 <div class="es-bento__foot">
                   <div class="es-bento__meta">
@@ -731,7 +731,7 @@ export class LandingComponent implements OnInit, OnDestroy {
     { num: '15K+',  label: 'Live Events'  },
     { num: '350K+', label: 'Attendees'    },
     { num: '3.2K+', label: 'Organizers'   },
-    { num: '4.9★',  label: 'Avg. Rating'  },
+    { num: '4.9*',  label: 'Avg. Rating'  },
   ];
 
   readonly marqueeItems: string[] = [

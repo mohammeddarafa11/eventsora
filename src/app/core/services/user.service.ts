@@ -4,6 +4,7 @@ import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Observable, throwError, BehaviorSubject } from 'rxjs';
 import { catchError, map, tap } from 'rxjs/operators';
 import { UserProfile } from './auth.service';
+import { Category } from '@core/services/category'; // ← required for getFavorites()
 
 // ─────────────────────────────────────────────
 // MODELS
@@ -143,6 +144,25 @@ export class UserService {
       .post<ServiceResponse<unknown>>(
         `${this.baseUrl}/User/add-favorites`,
         categoryIds,
+      )
+      .pipe(catchError(this.handleError));
+  }
+
+  /** GET /api/User/favorites — returns the user's saved category list */
+  getFavorites(): Observable<Category[]> {
+    return this.http
+      .get<ServiceResponse<Category[]>>(`${this.baseUrl}/User/favorites`)
+      .pipe(
+        map(r => (r.success ? r.data ?? [] : [])),
+        catchError(this.handleError),
+      );
+  }
+
+  /** DELETE /api/User/remove-favorite/{categoryId} */
+  removeFavorite(categoryId: number): Observable<ServiceResponse<unknown>> {
+    return this.http
+      .delete<ServiceResponse<unknown>>(
+        `${this.baseUrl}/User/remove-favorite/${categoryId}`,
       )
       .pipe(catchError(this.handleError));
   }

@@ -10,7 +10,7 @@ import { generateId } from '@shared/utils/merge-classes';
 export class ZardIdDirective implements OnInit {
   @Input() zardId?: string;
 
-  // ✅ Add a signal to store the generated ID
+  // Add a signal to store the generated ID
   private _id = signal<string>('');
 
   constructor(private elementRef: ElementRef) {}
@@ -22,7 +22,7 @@ export class ZardIdDirective implements OnInit {
     this.elementRef.nativeElement.id = elementId;
   }
 
-  // ✅ Expose id as a method that returns the signal value
+  // Expose id as a method that returns the signal value
   id(): string {
     return this._id();
   }

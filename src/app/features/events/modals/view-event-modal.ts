@@ -69,9 +69,9 @@ import { Event as EventModel, EventLocationType, EventType } from "@core/models/
         <span style="padding:5px 12px;border-radius:100px;font-size:.61rem;letter-spacing:.1em;text-transform:uppercase;font-weight:600;background:rgba(113,113,122,.12);color:#71717a;border:1px solid rgba(113,113,122,.2)">Ended</span>
       }
       @if (event().event_location_type === EventLocationType.Online) {
-        <span style="padding:5px 12px;border-radius:100px;font-size:.61rem;letter-spacing:.1em;text-transform:uppercase;font-weight:600;background:var(--gold-dim);color:var(--gold);border:1px solid var(--gold-brd)">💻 Online</span>
+        <span style="padding:5px 12px;border-radius:100px;font-size:.61rem;letter-spacing:.1em;text-transform:uppercase;font-weight:600;background:var(--gold-dim);color:var(--gold);border:1px solid var(--gold-brd)">Online</span>
       } @else {
-        <span style="padding:5px 12px;border-radius:100px;font-size:.61rem;letter-spacing:.1em;text-transform:uppercase;font-weight:600;background:var(--coral-dim);color:var(--coral);border:1px solid var(--coral-brd)">📍 In-Person</span>
+        <span style="padding:5px 12px;border-radius:100px;font-size:.61rem;letter-spacing:.1em;text-transform:uppercase;font-weight:600;background:var(--coral-dim);color:var(--coral);border:1px solid var(--coral-brd)">In-Person</span>
       }
     </div>
     <button class="close-btn absolute top-4 right-4 flex items-center justify-center"

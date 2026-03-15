@@ -7,7 +7,8 @@ import { userRoleGuard }   from './core/guards/user-role.guard';
 import { EventDetail }     from './features/event-detail/event-detail';
 
 export const routes: Routes = [
-  // ── PUBLIC ────────────────────────────────────────────────────────────
+
+  // ── PUBLIC ──────────────────────────────────────────────────────────────
   {
     path: '',
     loadComponent: () =>
@@ -15,7 +16,7 @@ export const routes: Routes = [
     canActivate: [guestGuard],
   },
 
-  // ── ORGANIZER DASHBOARD ───────────────────────────────────────────────
+  // ── ORGANIZER DASHBOARD ─────────────────────────────────────────────────
   {
     path: '',
     loadComponent: () =>
@@ -50,13 +51,18 @@ export const routes: Routes = [
             m => m.MembershipsPageComponent,
           ),
       },
+      // Ticket verification — organizer scans UUID at entry
+      {
+        path: 'verify-ticket',
+        loadComponent: () =>
+          import('./features/tickets/verify-ticket/verify-ticket').then(
+            m => m.VerifyTicketComponent,
+          ),
+      },
     ],
   },
 
-  // ── CATEGORY ONBOARDING ───────────────────────────────────────────────
-  // Shown once after a new user logs in. The component's ngOnInit redirects
-  // to /user-dashboard immediately if the user already has saved categories,
-  // so returning users never land here.
+  // ── CATEGORY ONBOARDING ─────────────────────────────────────────────────
   {
     path: 'select-categories',
     loadComponent: () =>
@@ -66,7 +72,7 @@ export const routes: Routes = [
     canActivate: [authGuard, userRoleGuard],
   },
 
-  // ── USER DASHBOARD ────────────────────────────────────────────────────
+  // ── USER DASHBOARD ───────────────────────────────────────────────────────
   {
     path: 'user-dashboard',
     loadComponent: () =>
@@ -75,6 +81,8 @@ export const routes: Routes = [
       ),
     canActivate: [authGuard, userRoleGuard],
     children: [
+
+      // Home feed (For You · Who to Follow · Following · Trending)
       {
         path: '',
         loadComponent: () =>
@@ -82,7 +90,11 @@ export const routes: Routes = [
             m => m.UserDashboardHome,
           ),
       },
+
+      // Event detail (Follow Org + post-booking prompt)
       { path: 'events/:id', component: EventDetail },
+
+      // My ticket bookings
       {
         path: 'bookings',
         loadComponent: () =>
@@ -90,9 +102,46 @@ export const routes: Routes = [
             m => m.UserBookingsComponent,
           ),
       },
+
+      // Edit genre interests
+      {
+        path: 'edit-interests',
+        loadComponent: () =>
+          import('./features/user-dashboard/edit-interests/edit-interests').then(
+            m => m.EditInterests,
+          ),
+      },
+
+      // ── MEETUPS ────────────────────────────────────────────────────────
+      // Browse all community meetups + join via POST /api/Meetup/{id}/join
+      {
+        path: 'meetups',
+        loadComponent: () =>
+          import('./features/user-dashboard/meetups/meetups-page').then(
+            m => m.MeetupsPage,
+          ),
+      },
+
+      // Meetups the user has joined — GET /api/Meetup/joinedmeetupsbyuser/{id}
+      {
+        path: 'my-meetups',
+        loadComponent: () =>
+          import('./features/user-dashboard/my-meetups/my-meetups').then(
+            m => m.MyMeetupsPage,
+          ),
+      },
+      { path: 'my-created-meetups', loadComponent:()=> import('./features/user-dashboard/my-created-meetups/my-created-meetups').then((c)=> c.MyCreatedMeetupsPage) },
+      {
+        path: 'my-memberships',
+        loadComponent: () =>
+          import('./features/user-dashboard/my-memberships/my-memberships').then(
+            m => m.MyMembershipsPage,
+          ),
+      },
+
     ],
   },
 
-  // ── FALLBACK ──────────────────────────────────────────────────────────
+  // ── FALLBACK ─────────────────────────────────────────────────────────────
   { path: '**', redirectTo: '' },
 ];
