@@ -1,658 +1,713 @@
 // src/app/features/user-dashboard/my-memberships/my-memberships.ts
-//
-// Two sections:
-//   A) MY MEMBERSHIPS  — fetched from GET /api/User (memberships[])
-//                        org details hydrated via GET /api/Organization/{id}
-//   B) DISCOVER ORGS   — orgs derived from user's favourite categories
-//                        GET /api/User/favorites → categories
-//                        GET /api/Event/Category?categoryId={id} → events → orgIds
-//                        GET /api/Organization/{id} → org details
-//                        POST /api/OrganizationMemberShip/{OrgId}/join
-//
+
 import {
- Component, inject, signal, computed, OnInit, OnDestroy,
+  Component, computed, inject, OnInit,
+  signal, ChangeDetectionStrategy,
 } from '@angular/core';
-import { CommonModule }  from '@angular/common';
-import { FormsModule }   from '@angular/forms';
-import { RouterModule }  from '@angular/router';
-import { HttpClient }    from '@angular/common/http';
-import { Subject, of, forkJoin } from 'rxjs';
-import { catchError, map, takeUntil } from 'rxjs/operators';
-import { AuthService }   from '@core/services/auth.service';
-import { MembershipStatus } from '@core/models/membership.model';
+import { CommonModule, DatePipe }    from '@angular/common';
+import { toast }                     from 'ngx-sonner';
 
-interface OrgInfo {
- id: number; name: string | null;
- bio?: string | null; city?: string | null; region?: string | null;
- logoUrl?: string | null; coverUrl?: string | null;
-}
-interface Membership {
- organizationId: number;
- organization:   OrgInfo | null;
- status:         MembershipStatus;
- requestDate:    string;
- joinDate?:      string | null;
-}
-interface DiscoverOrg extends OrgInfo {
- catId?: number; catName?: string; eventCount: number;
-}
+import { UserMembershipService }     from '@core/services/user-membership.service';
+import {
+  UserOrgMembership,
+  OrgSummary,
+  MembershipStatus,
+}                                    from '@core/models/user-membership.model';
 
-const BASE = 'https://eventora.runasp.net/api';
+type ActiveTab = 'joined' | 'pending' | 'browse';
 
 @Component({
- selector:   'app-my-memberships',
- standalone: true,
- imports:    [CommonModule, FormsModule, RouterModule],
- template: `
-   <link rel="preconnect" href="https://fonts.googleapis.com"/>
-   <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+  selector: 'app-my-memberships',
+  standalone: true,
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  imports: [CommonModule, DatePipe],
 
-   <div class="mm-root">
+  styles: [`
+    @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap');
 
-     <!-- ── HERO ── -->
-     <header class="mm-hero">
-       <div class="mm-orb-a"></div><div class="mm-orb-b"></div>
-       <div class="mm-hero__body">
-         <div class="mm-eyebrow">
-           <span class="mm-tag">My Network</span>
-           @if (memberships().length > 0) {
-             <span class="mm-tag mm-tag--dim">{{ memberships().length }} joined</span>
-           }
-         </div>
-         <h1 class="mm-title">My <em class="mm-accent">Memberships</em></h1>
-         <p class="mm-sub">Organisations you've joined — and ones you might like.</p>
-       </div>
-     </header>
+    @keyframes fade-up {
+      from { opacity: 0; transform: translateY(14px); }
+      to   { opacity: 1; transform: none; }
+    }
+    @keyframes shimmer {
+      from { background-position: -800px 0; }
+      to   { background-position:  800px 0; }
+    }
+    @keyframes spin-anim { to { transform: rotate(360deg); } }
 
-     <!-- ════ A: MY MEMBERSHIPS ════ -->
-     <div class="mm-section-hd">
-       <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-         <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
-       </svg>
-       My Memberships
-     </div>
+    .font-bebas   { font-family: 'Bebas Neue', sans-serif; }
+    .font-jakarta { font-family: 'Plus Jakarta Sans', sans-serif; }
+    .font-mono-dm { font-family: 'DM Mono', monospace; }
 
-     @if (loadingMembers()) {
-       <div class="mm-grid">
-         @for (n of [0,1,2]; track n) { <div class="mm-skel" style="height:120px"></div> }
-       </div>
-     } @else if (memberships().length === 0) {
-       <div class="mm-hint">
-         <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
-           <path stroke-linecap="round" stroke-linejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-         </svg>
-         You haven't joined any organisations yet. Discover some below.
-       </div>
-     } @else {
-       <div class="mm-grid">
-         @for (m of memberships(); track m.organizationId) {
-           <article class="mm-card mm-card--member">
-             @if (m.organization?.coverUrl) {
-               <div class="mm-card__cover">
-                 <img [src]="m.organization!.coverUrl!" alt="" class="mm-card__cover-img" (error)="onCoverErr($event)"/>
-                 <div class="mm-card__cover-scrim"></div>
-               </div>
-             } @else { <div class="mm-card__cover mm-card__cover--blank"></div> }
+    .page-enter { animation: fade-up .38s cubic-bezier(.22,1,.36,1) both; }
+    .spin       { animation: spin-anim .75s linear infinite; }
 
-             <div class="mm-card__logo-wrap">
-               @if (m.organization?.logoUrl) {
-                 <img [src]="m.organization!.logoUrl!" class="mm-card__logo"
-                      [alt]="m.organization?.name ?? ''" (error)="onImgErr($event)"/>
-               } @else {
-                 <div class="mm-card__logo mm-card__logo--fb" [style]="grad(m.organizationId)">
-                   {{ (m.organization?.name ?? '#')[0].toUpperCase() }}
-                 </div>
-               }
-             </div>
+    .skeleton {
+      background: linear-gradient(
+        90deg,
+        rgba(242,238,230,.04) 25%,
+        rgba(242,238,230,.09) 50%,
+        rgba(242,238,230,.04) 75%
+      );
+      background-size: 1600px 100%;
+      animation: shimmer 1.6s ease-in-out infinite;
+    }
 
-             <div class="mm-card__body">
-               <span class="mm-pill" [ngClass]="pillCls(m.status)">
-                 <span class="mm-pill__dot" [ngClass]="dotCls(m.status)"></span>
-                 {{ statusLbl(m.status) }}
-               </span>
-               <h3 class="mm-card__name">{{ m.organization?.name ?? 'Organisation #' + m.organizationId }}</h3>
-               @if (m.organization?.bio)  { <p class="mm-card__bio">{{ m.organization!.bio }}</p> }
-               @if (m.organization?.city) {
-                 <div class="mm-card__loc">
-                   <svg width="10" height="10" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                     <path stroke-linecap="round" stroke-linejoin="round" d="M17.657 16.657L13.414 20.9a2 2 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/>
-                     <path stroke-linecap="round" stroke-linejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/>
-                   </svg>
-                   {{ m.organization!.city }}
-                 </div>
-               }
-               <div class="mm-card__date">
-                 @if (m.status === MS.Pending)  { Requested {{ fmt(m.requestDate) }} }
-                 @else if (m.joinDate)           { Joined {{ fmt(m.joinDate) }} }
-               </div>
-             </div>
+    .cover-fade {
+      background: linear-gradient(to top, #0c0c10 0%, transparent 100%);
+    }
 
-             <div class="mm-card__foot">
-               @if (m.status === MS.Approved)  { <span class="mm-foot-note mm-foot-note--green"><svg width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>Active Member</span> }
-               @if (m.status === MS.Pending)   { <span class="mm-foot-note">Awaiting approval.</span> }
-               @if (m.status === MS.Banned)    { <span class="mm-foot-note mm-foot-note--warn">You have been banned.</span> }
-               @if (m.status === MS.Rejected)  {
-                 <button class="mm-rejoin-btn" [disabled]="joiningId() === m.organizationId"
-                         (click)="join(m.organizationId)">
-                   @if (joiningId() === m.organizationId) { <span class="mm-spin"></span> } @else { Request again }
-                 </button>
-               }
-             </div>
-           </article>
-         }
-       </div>
-     }
+    .stat-card::before {
+      content: '';
+      position: absolute; top: 0; left: 0; right: 0; height: 1px;
+      background: linear-gradient(to right, #a5b4fc, transparent);
+      opacity: 0; transition: opacity .3s;
+    }
+    .stat-card:hover::before { opacity: 1; }
 
-     <!-- ════ B: DISCOVER ════ -->
-     <div class="mm-section-hd mm-section-hd--discover">
-       <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-         <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 15.803a7.5 7.5 0 0010.607 0z"/>
-       </svg>
-       Discover Organisations
-       <span class="mm-section-hd__sub">Based on your favourite genres</span>
-     </div>
+    .org-glow {
+      position: absolute; bottom: 0; left: 0; right: 0; height: 2px;
+      background: linear-gradient(to right, #a5b4fc, transparent);
+      opacity: 0; transition: opacity .3s;
+    }
+    .org-card:hover .org-glow { opacity: 1; }
 
-     @if (loadingDiscover()) {
-       <div class="mm-grid">
-         @for (n of [0,1,2,3,4,5]; track n) {
-           <div class="mm-skel" style="height:200px" [style.animation-delay]="n*60+'ms'"></div>
-         }
-       </div>
-     } @else if (discoverOrgs().length === 0) {
-       <div class="mm-hint">
-         <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
-           <path stroke-linecap="round" stroke-linejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-         </svg>
-         No organisations found for your categories.
-         <a class="mm-hint__link" routerLink="/user-dashboard/edit-interests">Update interests</a>
-       </div>
-     } @else {
-       <!-- category filter tabs -->
-       @if (catTabs().length > 1) {
-         <div class="mm-cat-tabs">
-           <button class="mm-cat-tab" [class.mm-cat-tab--on]="activeCat() === null"
-                   (click)="activeCat.set(null)">All</button>
-           @for (c of catTabs(); track c.id) {
-             <button class="mm-cat-tab" [class.mm-cat-tab--on]="activeCat() === c.id"
-                     (click)="activeCat.set(c.id)">{{ c.name }}</button>
-           }
-         </div>
-       }
+    .line-clamp-2 {
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
 
-       <div class="mm-grid">
-         @for (org of visibleOrgs(); track org.id; let i = $index) {
-           <article class="mm-card mm-card--discover" [style.animation-delay]="i*45+'ms'">
-             @if (org.coverUrl) {
-               <div class="mm-card__cover">
-                 <img [src]="org.coverUrl" alt="" class="mm-card__cover-img" (error)="onCoverErr($event)"/>
-                 <div class="mm-card__cover-scrim"></div>
-               </div>
-             } @else { <div class="mm-card__cover mm-card__cover--blank"></div> }
+    .text-stroke-indigo {
+      color: transparent;
+      -webkit-text-stroke: 2px #a5b4fc;
+    }
 
-             <div class="mm-card__logo-wrap">
-               @if (org.logoUrl) {
-                 <img [src]="org.logoUrl" [alt]="org.name ?? ''" class="mm-card__logo" (error)="onImgErr($event)"/>
-               } @else {
-                 <div class="mm-card__logo mm-card__logo--fb" [style]="grad(org.id)">
-                   {{ (org.name ?? '#')[0].toUpperCase() }}
-                 </div>
-               }
-             </div>
+    ::-webkit-scrollbar       { width: 3px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: rgba(242,238,230,.07); border-radius: 99px; }
+  `],
 
-             <div class="mm-card__body">
-               @if (org.catName) { <span class="mm-cat-badge">{{ org.catName }}</span> }
-               <h3 class="mm-card__name">{{ org.name ?? 'Organisation #' + org.id }}</h3>
-               @if (org.bio)  { <p class="mm-card__bio">{{ org.bio }}</p> }
-               @if (org.city) {
-                 <div class="mm-card__loc">
-                   <svg width="10" height="10" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                     <path stroke-linecap="round" stroke-linejoin="round" d="M17.657 16.657L13.414 20.9a2 2 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/>
-                     <path stroke-linecap="round" stroke-linejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/>
-                   </svg>
-                   {{ org.city }}
-                 </div>
-               }
-               <p class="mm-card__events">{{ org.eventCount }} event{{ org.eventCount !== 1 ? 's' : '' }}</p>
-             </div>
+  template: `
+<div class="w-full min-h-full font-jakarta" style="background:#060608; color:#F2EEE6;">
 
-             <div class="mm-card__foot">
-               @if (membershipOf(org.id) === MS.Approved) {
-                 <span class="mm-foot-note mm-foot-note--green">
-                   <svg width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
-                     <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
-                   </svg>
-                   Member
-                 </span>
-               } @else if (membershipOf(org.id) === MS.Pending) {
-                 <span class="mm-foot-note">Request pending</span>
-               } @else if (membershipOf(org.id) === MS.Banned) {
-                 <span class="mm-foot-note mm-foot-note--warn">Banned</span>
-               } @else {
-                 <button class="mm-join-btn" [disabled]="joiningId() === org.id"
-                         (click)="join(org.id)">
-                   @if (joiningId() === org.id) {
-                     <span class="mm-spin"></span> Sending…
-                   } @else {
-                     <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
-                       <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/>
-                     </svg>
-                     Request to Join
-                   }
-                 </button>
-               }
-             </div>
-           </article>
-         }
-       </div>
-     }
+  <!-- ══════════════  HEADER  ══════════════ -->
+  <header class="relative overflow-hidden border-b border-white/[0.06]">
+    <div class="absolute inset-0 pointer-events-none overflow-hidden">
+      <div class="absolute rounded-full"
+           style="width:70vw;height:70vw;top:-30%;left:-15%;
+                  background:radial-gradient(circle,rgba(165,180,252,.08) 0%,transparent 65%);
+                  filter:blur(80px)"></div>
+      <div class="absolute rounded-full"
+           style="width:50vw;height:50vw;top:0;right:-10%;
+                  background:radial-gradient(circle,rgba(99,102,241,.05) 0%,transparent 65%);
+                  filter:blur(80px)"></div>
+    </div>
 
-     @if (toast()) {
-       <div class="mm-toast" [class.mm-toast--err]="toast()!.type === 'error'" role="status" aria-live="polite">
-         {{ toast()!.msg }}
-       </div>
-     }
+    <div class="relative z-10 max-w-screen-xl mx-auto px-4 sm:px-8 lg:px-12 py-8 sm:py-10">
+      <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+        <div>
+          <span class="font-mono-dm text-[0.56rem] tracking-[.22em] uppercase text-indigo-300/75 mb-3 block">
+            ◆ Your Account
+          </span>
+          <h1 class="font-bebas leading-[.88] tracking-wider m-0"
+              style="font-size:clamp(2.8rem,11vw,7rem)">
+            MY<br/>
+            <span class="text-stroke-indigo">ORGS</span>
+          </h1>
+          <p class="mt-2 text-sm text-white/40 font-light max-w-sm leading-relaxed">
+            Browse and join organisations, track your membership status, and manage your connections.
+          </p>
+        </div>
+        @if (!loading() && !browseLoading()) {
+          <span class="font-mono-dm text-[0.58rem] tracking-widest uppercase text-white/25">
+            {{ allOrgs().length }} organisations available
+          </span>
+        }
+      </div>
 
-     <div style="height:4rem"></div>
-   </div>
- `,
- styles: [`
-   :host {
-     --indigo:#a5b4fc; --green:#22c55e; --gold:#F0B429; --coral:#FF4433;
-     --bg:#060608; --bg2:#09090c; --bg3:#111116; --bg4:#16161c;
-     --text:#F2EEE6; --muted:rgba(242,238,230,.42);
-     --bdr:rgba(242,238,230,.07); --bdrhi:rgba(242,238,230,.12);
-     font-family:'Plus Jakarta Sans',sans-serif;
-     display:block; background:var(--bg); color:var(--text); min-height:100%;
-   }
+      <!-- Stat cards -->
+      @if (!loading() && myMemberships().length > 0) {
+        <div class="grid grid-cols-3 gap-3 mt-6">
+          @for (s of statsCards(); track s.label; let i = $index) {
+            <div class="stat-card relative overflow-hidden rounded-2xl border border-white/[0.07]
+                        bg-[#0c0c10] p-3.5 cursor-default page-enter
+                        transition-all duration-300 hover:-translate-y-1"
+                 [style.animation-delay]="i * 60 + 'ms'">
+              <div class="font-bebas text-3xl leading-none tracking-wider" [style.color]="s.color">
+                {{ s.value }}
+              </div>
+              <div class="font-mono-dm text-[0.56rem] tracking-[.18em] uppercase text-white/40 mt-1">
+                {{ s.label }}
+              </div>
+              <div class="absolute right-3.5 top-1/2 -translate-y-1/2 w-9 h-9 rounded-xl
+                          flex items-center justify-center" [style.background]="s.bgColor">
+                <svg class="w-4 h-4" [style.color]="s.color"
+                     fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" [attr.d]="s.path"/>
+                </svg>
+              </div>
+            </div>
+          }
+        </div>
+      }
+    </div>
+  </header>
 
-   /* Hero */
-   .mm-hero { position:relative; overflow:hidden; padding:2.5rem 1.75rem 1.75rem; }
-   .mm-orb-a,.mm-orb-b { position:absolute; border-radius:50%; pointer-events:none; z-index:0; }
-   .mm-orb-a { width:420px;height:420px;top:-160px;right:-80px;background:radial-gradient(circle,rgba(165,180,252,.07) 0%,transparent 65%); }
-   .mm-orb-b { width:260px;height:260px;bottom:-80px;left:-60px;background:radial-gradient(circle,rgba(240,180,41,.05) 0%,transparent 65%); }
-   .mm-hero__body { position:relative; z-index:1; }
-   .mm-eyebrow { display:flex; gap:.5rem; margin-bottom:.9rem; }
-   .mm-tag {
-     display:inline-flex; align-items:center; padding:3px 10px; border-radius:100px;
-     font-family:'DM Mono',monospace; font-size:.59rem; letter-spacing:.12em; text-transform:uppercase;
-     background:rgba(165,180,252,.1); border:1px solid rgba(165,180,252,.22); color:var(--indigo);
-   }
-   .mm-tag--dim { background:rgba(242,238,230,.05); border-color:var(--bdr); color:var(--muted); }
-   .mm-title { font-family:'Bebas Neue',sans-serif; font-size:clamp(2.6rem,7vw,4.5rem); letter-spacing:.03em; line-height:.9; color:var(--text); margin:0 0 .6rem; }
-   .mm-accent { color:var(--indigo); font-style:normal; }
-   .mm-sub { font-size:.84rem; color:var(--muted); margin:0; font-weight:300; line-height:1.6; }
+  <!-- ══════════════  STICKY TAB BAR  ══════════════ -->
+  <div class="sticky top-0 z-30 border-b border-white/[0.06]"
+       style="background:rgba(6,6,8,.94);backdrop-filter:blur(20px)">
+    <div class="max-w-screen-xl mx-auto px-4 sm:px-8 lg:px-12">
+      <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between sm:gap-4">
 
-   /* Section headers */
-   .mm-section-hd {
-     display:flex; align-items:center; gap:.55rem; padding:1.5rem 1.75rem .7rem;
-     font-family:'DM Mono',monospace; font-size:.64rem; letter-spacing:.14em; text-transform:uppercase;
-     color:var(--indigo);
-   }
-   .mm-section-hd--discover { color:var(--gold); border-top:1px solid var(--bdr); margin-top:2rem; }
-   .mm-section-hd__sub { font-size:.55rem; color:var(--muted); text-transform:none; letter-spacing:.06em; margin-left:.25rem; }
+        <!-- Tabs -->
+        <div class="flex overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none]
+                    [&::-webkit-scrollbar]:hidden border-b sm:border-b-0 border-white/[0.06] -mb-px">
 
-   /* Category tabs */
-   .mm-cat-tabs { display:flex; gap:.4rem; flex-wrap:wrap; padding:0 1.75rem .9rem; overflow-x:auto; scrollbar-width:none; }
-   .mm-cat-tabs::-webkit-scrollbar { display:none; }
-   .mm-cat-tab {
-     padding:.32rem .85rem; border-radius:100px; flex-shrink:0;
-     background:var(--bg3); border:1px solid var(--bdr); color:var(--muted);
-     font-size:.78rem; font-weight:500; cursor:pointer; transition:all .18s;
-   }
-   .mm-cat-tab:hover { border-color:var(--bdrhi); color:var(--text); }
-   .mm-cat-tab--on { background:rgba(240,180,41,.1); border-color:rgba(240,180,41,.35)!important; color:var(--gold)!important; font-weight:700; }
+          <!-- Joined -->
+          <button (click)="setTab('joined')"
+                  class="font-mono-dm text-[0.6rem] tracking-[.12em] uppercase flex items-center
+                         gap-1.5 px-3.5 py-2.5 border-b-2 shrink-0 bg-transparent cursor-pointer
+                         hover:text-white/80 transition-colors duration-150 whitespace-nowrap"
+                  [class.text-indigo-300]="activeTab()==='joined'"
+                  [class.border-indigo-300]="activeTab()==='joined'"
+                  [class.text-white/40]="activeTab()!=='joined'"
+                  [class.border-transparent]="activeTab()!=='joined'">
+            Joined
+            <span class="inline-flex items-center justify-center min-w-[17px] h-[17px] px-1
+                         rounded-full text-[0.54rem] font-bold leading-none"
+                  [class.bg-indigo-400]="joinedCount()>0" [class.text-indigo-950]="joinedCount()>0"
+                  [class.bg-white/10]="joinedCount()===0" [class.text-white/40]="joinedCount()===0">
+              {{ joinedCount() }}
+            </span>
+          </button>
 
-   /* Grid */
-   .mm-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(270px,1fr)); gap:1rem; padding:0 1.75rem; }
+          <!-- Pending -->
+          <button (click)="setTab('pending')"
+                  class="font-mono-dm text-[0.6rem] tracking-[.12em] uppercase flex items-center
+                         gap-1.5 px-3.5 py-2.5 border-b-2 shrink-0 bg-transparent cursor-pointer
+                         hover:text-white/80 transition-colors duration-150 whitespace-nowrap"
+                  [class.text-indigo-300]="activeTab()==='pending'"
+                  [class.border-indigo-300]="activeTab()==='pending'"
+                  [class.text-white/40]="activeTab()!=='pending'"
+                  [class.border-transparent]="activeTab()!=='pending'">
+            Pending
+            <span class="inline-flex items-center justify-center min-w-[17px] h-[17px] px-1
+                         rounded-full text-[0.54rem] font-bold leading-none"
+                  [class.bg-red-500]="pendingCount()>0" [class.text-white]="pendingCount()>0"
+                  [class.bg-white/10]="pendingCount()===0" [class.text-white/40]="pendingCount()===0">
+              {{ pendingCount() }}
+            </span>
+          </button>
 
-   /* Cards */
-   .mm-card {
-     background:var(--bg2); border:1px solid var(--bdr); border-radius:18px;
-     overflow:hidden; display:flex; flex-direction:column;
-     transition:border-color .2s,box-shadow .22s,transform .22s cubic-bezier(.22,1,.36,1);
-     animation:cardIn .42s cubic-bezier(.22,1,.36,1) both;
-   }
-   @keyframes cardIn { from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:none} }
-   .mm-card--member:hover  { border-color:rgba(165,180,252,.25); box-shadow:0 14px 40px rgba(0,0,0,.4); transform:translateY(-3px); }
-   .mm-card--discover:hover{ border-color:rgba(240,180,41,.25);  box-shadow:0 14px 40px rgba(0,0,0,.4); transform:translateY(-3px); }
+          <!-- Browse -->
+          <button (click)="setTab('browse')"
+                  class="font-mono-dm text-[0.6rem] tracking-[.12em] uppercase flex items-center
+                         gap-1.5 px-3.5 py-2.5 border-b-2 shrink-0 bg-transparent cursor-pointer
+                         hover:text-white/80 transition-colors duration-150 whitespace-nowrap"
+                  [class.text-indigo-300]="activeTab()==='browse'"
+                  [class.border-indigo-300]="activeTab()==='browse'"
+                  [class.text-white/40]="activeTab()!=='browse'"
+                  [class.border-transparent]="activeTab()!=='browse'">
+            Browse All
+            <span class="inline-flex items-center justify-center min-w-[17px] h-[17px] px-1
+                         rounded-full text-[0.54rem] font-bold leading-none bg-indigo-400 text-indigo-950">
+              {{ allOrgs().length }}
+            </span>
+          </button>
+        </div>
 
-   .mm-card__cover {
-     position:relative; height:72px; min-height:72px; max-height:72px;
-     overflow:hidden; background:var(--bg3); flex-shrink:0;
-   }
-   .mm-card__cover--blank {
-     position:relative; height:72px; min-height:72px; max-height:72px;
-     overflow:hidden; flex-shrink:0;
-     background: linear-gradient(135deg,#0d0d14 0%,#111118 50%,#0a0a10 100%);
-   }
-   .mm-card__cover--blank::before {
-     content:''; position:absolute; inset:0;
-     background-image: repeating-linear-gradient(0deg,rgba(255,255,255,.025) 0px,rgba(255,255,255,.025) 1px,transparent 1px,transparent 20px),
-                       repeating-linear-gradient(90deg,rgba(255,255,255,.025) 0px,rgba(255,255,255,.025) 1px,transparent 1px,transparent 20px);
-   }
-   .mm-card__cover--blank::after {
-     content:''; position:absolute;
-     width:120px; height:120px; border-radius:50%;
-     top:-40px; right:20px;
-     background: radial-gradient(circle, rgba(165,180,252,.12) 0%, transparent 70%);
-   }
-   .mm-card__cover-img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
-   .mm-card__cover-scrim { position:absolute; inset:0; background:linear-gradient(to top,rgba(9,9,12,.75) 0%,transparent 60%); }
+        <!-- Search -->
+        <div class="relative flex items-center py-2 sm:w-52 sm:shrink-0">
+          <input type="text"
+                 [placeholder]="activeTab()==='browse' ? 'Search organisations…' : 'Search my orgs…'"
+                 [value]="searchQuery()"
+                 (input)="onSearch($event)"
+                 class="w-full py-2 pl-4 pr-10 rounded-full text-[13px] text-white/90 outline-none
+                        bg-white/[0.04] border border-white/[0.07] placeholder:text-white/20
+                        focus:border-indigo-400/40 focus:ring-2 focus:ring-indigo-400/10
+                        transition-all duration-150"/>
+          <svg class="absolute right-3.5 w-3.5 h-3.5 text-white/20 pointer-events-none"
+               fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round"
+                  d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 15.803a7.5 7.5 0 0010.607 0z"/>
+          </svg>
+        </div>
+      </div>
+    </div>
+  </div>
 
-   .mm-card__logo-wrap { margin:-20px 0 0 1rem; position:relative; z-index:2; flex-shrink:0; }
-   .mm-card__logo { width:44px; height:44px; border-radius:12px; border:2px solid var(--bg2); object-fit:cover; }
-   .mm-card__logo--fb {
-     width:44px; height:44px; border-radius:12px; border:2px solid var(--bg2);
-     display:flex; align-items:center; justify-content:center;
-     font-family:'Bebas Neue',sans-serif; font-size:1.1rem; color:#fff;
-   }
+  <!-- ══════════════  MAIN CONTENT  ══════════════ -->
+  <main class="max-w-screen-xl mx-auto px-4 sm:px-8 lg:px-12 py-6 sm:py-8">
 
-   .mm-card__body { padding: 2rem; display:flex; flex-direction:column; gap:.38rem; flex:1; }
-   .mm-card__name { font-family:'Bebas Neue',sans-serif; font-size:1.05rem; letter-spacing:.04em; color:var(--text); margin:0; line-height:1.1; }
-   .mm-card__bio { font-size:.73rem; color:var(--muted); line-height:1.5; margin:0; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
-   .mm-card__loc { display:flex; align-items:center; gap:.3rem; font-size:.68rem; color:var(--muted); }
-   .mm-card__loc svg { flex-shrink:0; opacity:.5; }
-   .mm-card__date { font-family:'DM Mono',monospace; font-size:.56rem; letter-spacing:.07em; color:var(--muted); }
-   .mm-card__events { font-family:'DM Mono',monospace; font-size:.57rem; letter-spacing:.08em; color:rgba(240,180,41,.6); margin:0; }
+    <!-- Loading -->
+    @if (loading() || (activeTab()==='browse' && browseLoading())) {
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+        @for (i of [1,2,3,4,5,6,7,8]; track i) {
+          <div class="skeleton rounded-2xl border border-white/[0.07] h-52"
+               [style.animation-delay]="i*40+'ms'"></div>
+        }
+      </div>
 
-   .mm-cat-badge {
-     display:inline-flex; align-items:center; padding:2px 8px; border-radius:6px; width:fit-content;
-     font-family:'DM Mono',monospace; font-size:.56rem; letter-spacing:.09em; text-transform:uppercase;
-     background:rgba(240,180,41,.08); border:1px solid rgba(240,180,41,.2); color:var(--gold);
-   }
+    <!-- ── BROWSE TAB ── -->
+    } @else if (activeTab()==='browse') {
+      @if (filteredBrowseOrgs().length === 0) {
+        <div class="flex flex-col items-center justify-center py-20 text-center gap-4">
+          <svg class="w-9 h-9 text-white/[0.18]" fill="none" stroke="currentColor"
+               stroke-width="1.5" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round"
+                  d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 15.803a7.5 7.5 0 0010.607 0z"/>
+          </svg>
+          <div>
+            <p class="font-bebas text-xl tracking-wider">No organisations found</p>
+            @if (searchQuery().trim()) {
+              <p class="mt-1 text-xs text-white/30">Try a different search term.</p>
+            }
+          </div>
+        </div>
+      } @else {
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          @for (org of filteredBrowseOrgs(); track org.id; let i = $index) {
+            <div class="org-card relative rounded-2xl overflow-hidden border border-white/[0.07]
+                        bg-[#0c0c10] flex flex-col page-enter
+                        transition-all duration-300 hover:-translate-y-1
+                        hover:border-indigo-400/25 hover:shadow-[0_20px_60px_rgba(0,0,0,.5)]"
+                 [style.animation-delay]="i*40+'ms'">
 
-   /* Status pill */
-   .mm-pill { display:inline-flex; align-items:center; gap:5px; padding:2px 9px; border-radius:100px; width:fit-content; font-family:'DM Mono',monospace; font-size:.55rem; letter-spacing:.1em; text-transform:uppercase; }
-   .mm-pill--active   { background:rgba(34,197,94,.1);   border:1px solid rgba(34,197,94,.25);  color:var(--green); }
-   .mm-pill--pending  { background:rgba(240,180,41,.1);  border:1px solid rgba(240,180,41,.3);  color:var(--gold); }
-   .mm-pill--banned   { background:rgba(255,68,51,.1);   border:1px solid rgba(255,68,51,.25);  color:var(--coral); }
-   .mm-pill--rejected { background:rgba(242,238,230,.05);border:1px solid var(--bdr);            color:var(--muted); }
-   .mm-pill__dot { width:6px; height:6px; border-radius:50%; flex-shrink:0; }
-   .mm-dot--active  { background:var(--green); animation:dotPulse 1.6s ease-in-out infinite; }
-   .mm-dot--pending { background:var(--gold);  animation:dotPulse 1.6s ease-in-out infinite; }
-   .mm-dot--banned  { background:var(--coral); }
-   .mm-dot--muted   { background:var(--muted); }
-   @keyframes dotPulse { 0%,100%{opacity:1} 50%{opacity:.3} }
+              @if (busyId()===org.id) {
+                <div class="absolute inset-0 z-10 rounded-2xl flex items-center justify-center"
+                     style="background:rgba(6,6,8,.7);backdrop-filter:blur(4px)">
+                  <div class="spin w-6 h-6 rounded-full border-2 border-white/15 border-t-white"></div>
+                </div>
+              }
 
-   /* Footer */
-   .mm-card__foot { padding:.6rem 1rem .85rem; border-top:1px solid var(--bdr); margin-top:auto; }
-   .mm-foot-note { font-size:.72rem; color:var(--muted); }
-   .mm-foot-note--warn  { color:var(--coral); }
-   .mm-foot-note--green { display:inline-flex; align-items:center; gap:.3rem; color:var(--green); font-size:.72rem; font-weight:600; }
+              <!-- Cover -->
+              <div class="relative h-[72px] shrink-0 overflow-hidden"
+                   style="background:linear-gradient(135deg,rgba(99,102,241,.15),rgba(165,180,252,.05))">
+                @if (org.coverUrl) {
+                  <img [src]="org.coverUrl" [alt]="org.name??''"
+                       class="w-full h-full object-cover opacity-70" (error)="onImgErr($event)"/>
+                }
+                <div class="cover-fade absolute inset-0"></div>
+              </div>
 
-   .mm-join-btn {
-     display:inline-flex; align-items:center; gap:.35rem;
-     padding:.42rem 1rem; border-radius:10px;
-     background:rgba(240,180,41,.1); border:1px solid rgba(240,180,41,.35);
-     color:var(--gold); font-family:'Plus Jakarta Sans',sans-serif;
-     font-size:.78rem; font-weight:700; cursor:pointer; transition:all .18s;
-   }
-   .mm-join-btn:hover:not(:disabled) { background:rgba(240,180,41,.2); }
-   .mm-join-btn:disabled { opacity:.5; cursor:not-allowed; }
+              <!-- Body -->
+              <div class="px-4 pb-4 flex flex-col gap-3 flex-1">
+                <!-- Logo + name -->
+                <div class="flex items-end gap-3">
+                  <div class="w-11 h-11 rounded-xl shrink-0 overflow-hidden border-2 border-[#0c0c10]
+                              -mt-[22px] relative z-[1] flex items-center justify-center"
+                       [style]="getLogoStyle(org)">
+                    @if (org.logoUrl) {
+                      <img [src]="org.logoUrl" [alt]="org.name??''"
+                           class="w-full h-full object-cover" (error)="onImgErr($event)"/>
+                    } @else {
+                      <span class="font-bebas text-base text-white">{{ orgInitials(org) }}</span>
+                    }
+                  </div>
+                  <div class="flex-1 min-w-0">
+                    <p class="font-bebas text-base tracking-wide leading-tight truncate">
+                      {{ org.name ?? 'Unnamed Org' }}
+                    </p>
+                    @if (org.city) {
+                      <p class="font-mono-dm text-[0.54rem] tracking-wider text-white/30">
+                        {{ org.city }}{{ org.region ? ', '+org.region : '' }}
+                      </p>
+                    }
+                  </div>
+                </div>
 
-   .mm-rejoin-btn {
-     display:inline-flex; align-items:center; gap:.3rem;
-     padding:.35rem .9rem; border-radius:100px;
-     border:1px solid rgba(165,180,252,.3); background:rgba(165,180,252,.06);
-     color:var(--indigo); font-size:.74rem; font-weight:600; cursor:pointer; transition:all .18s;
-   }
-   .mm-rejoin-btn:hover:not(:disabled) { background:rgba(165,180,252,.14); }
-   .mm-rejoin-btn:disabled { opacity:.45; cursor:not-allowed; }
+                @if (org.bio) {
+                  <p class="text-[0.78rem] text-white/38 leading-relaxed line-clamp-2">{{ org.bio }}</p>
+                }
 
-   /* Hint */
-   .mm-hint { display:flex; align-items:center; gap:.5rem; padding:1rem 1.75rem; font-size:.8rem; color:var(--muted); }
-   .mm-hint__link { color:var(--gold); margin-left:.25rem; text-decoration:none; font-weight:600; }
-   .mm-hint__link:hover { text-decoration:underline; }
+                <!-- Status badge -->
+                <div class="mt-auto">
+                  @if (getMembershipStatus(org.id)===MS.Approved) {
+                    <span class="inline-flex items-center gap-1 px-2.5 py-[3px] rounded-full border
+                                 font-mono-dm text-[0.54rem] tracking-widest uppercase font-medium
+                                 bg-emerald-500/10 border-emerald-500/20 text-emerald-400">● Member</span>
+                  } @else if (getMembershipStatus(org.id)===MS.Pending) {
+                    <span class="inline-flex items-center gap-1 px-2.5 py-[3px] rounded-full border
+                                 font-mono-dm text-[0.54rem] tracking-widest uppercase font-medium
+                                 bg-amber-400/10 border-amber-400/25 text-amber-400">◎ Requested</span>
+                  } @else if (getMembershipStatus(org.id)===MS.Banned) {
+                    <span class="inline-flex items-center gap-1 px-2.5 py-[3px] rounded-full border
+                                 font-mono-dm text-[0.54rem] tracking-widest uppercase font-medium
+                                 bg-red-400/10 border-red-400/20 text-red-400">✕ Banned</span>
+                  }
+                </div>
 
-   /* Skeleton */
-   .mm-skel {
-     border-radius:18px;
-     background:linear-gradient(90deg,rgba(242,238,230,.04) 25%,rgba(242,238,230,.07) 50%,rgba(242,238,230,.04) 75%);
-     background-size:600px 100%; animation:shimmer 1.5s ease-in-out infinite;
-   }
-   @keyframes shimmer { from{background-position:-600px 0} to{background-position:600px 0} }
+                <!-- CTA -->
+                <div class="flex gap-2">
+                  @if (getMembershipStatus(org.id)===null) {
+                    <button (click)="join(org)" [disabled]="busyId()!==null"
+                            class="flex-1 flex items-center justify-center gap-1.5 py-2.5 px-3
+                                   rounded-xl font-mono-dm text-[0.6rem] tracking-wider uppercase font-medium
+                                   bg-indigo-400/10 text-indigo-300 border border-indigo-400/20
+                                   hover:bg-indigo-400/20 disabled:opacity-35 disabled:cursor-not-allowed
+                                   transition-all duration-150 cursor-pointer">
+                      <svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/>
+                      </svg>
+                      Join
+                    </button>
 
-   /* Spinner */
-   .mm-spin { width:11px; height:11px; border:2px solid rgba(255,255,255,.2); border-top-color:currentColor; border-radius:50%; animation:spin .65s linear infinite; display:inline-block; }
-   @keyframes spin { to{transform:rotate(360deg)} }
+                  } @else if (getMembershipStatus(org.id)===MS.Pending) {
+                    <button disabled
+                            class="flex-1 flex items-center justify-center gap-1.5 py-2.5 px-3
+                                   rounded-xl font-mono-dm text-[0.6rem] tracking-wider uppercase font-medium
+                                   bg-amber-400/[0.06] text-amber-400/50 border border-amber-400/12 cursor-default">
+                      <svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                      </svg>
+                      Pending…
+                    </button>
 
-   /* Toast */
-   .mm-toast {
-     position:fixed; bottom:2rem; left:50%; transform:translateX(-50%);
-     padding:.65rem 1.4rem; border-radius:12px;
-     background:rgba(165,180,252,.12); border:1px solid rgba(165,180,252,.3);
-     color:var(--indigo); font-size:.82rem; font-weight:600; white-space:nowrap; z-index:300;
-     animation:toastIn .3s cubic-bezier(.22,1,.36,1);
-   }
-   .mm-toast--err { background:rgba(255,68,51,.12); border-color:rgba(255,68,51,.3); color:var(--coral); }
-   @keyframes toastIn { from{opacity:0;transform:translateX(-50%) translateY(12px)} to{opacity:1;transform:translateX(-50%) translateY(0)} }
+                  } @else if (getMembershipStatus(org.id)===MS.Approved) {
+                    <button (click)="leave(org.id, org.name??'this org')" [disabled]="busyId()!==null"
+                            class="flex-1 flex items-center justify-center gap-1.5 py-2.5 px-3
+                                   rounded-xl font-mono-dm text-[0.6rem] tracking-wider uppercase font-medium
+                                   bg-white/[0.04] text-white/40 border border-white/[0.08]
+                                   hover:bg-red-500/10 hover:text-red-400 hover:border-red-500/20
+                                   disabled:opacity-35 disabled:cursor-not-allowed
+                                   transition-all duration-150 cursor-pointer">
+                      <svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15m3 0l3-3m0 0l-3-3m3 3H9"/>
+                      </svg>
+                      Leave
+                    </button>
+                  }
+                </div>
+              </div>
+              <div class="org-glow"></div>
+            </div>
+          }
+        </div>
+      }
 
-   @media (max-width:640px) {
-     .mm-hero { padding:1.75rem 1.1rem 1.5rem; }
-     .mm-section-hd,.mm-grid,.mm-cat-tabs,.mm-hint { padding-inline:1.1rem; }
-     .mm-grid { grid-template-columns:1fr; }
-   }
- `],
+    <!-- ── JOINED / PENDING TABS ── -->
+    } @else {
+      @if (filteredMyOrgs().length === 0) {
+        <div class="flex flex-col items-center justify-center py-24 text-center gap-5">
+          <div class="w-20 h-20 rounded-3xl flex items-center justify-center
+                      bg-indigo-400/[0.06] border border-indigo-400/15">
+            <svg class="w-10 h-10 text-indigo-400/35" fill="none" stroke="currentColor"
+                 stroke-width="1.5" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round"
+                    d="M3.75 21h16.5M4.5 3h15M5.25 3v18m13.5-18v18M9 6.75h1.5m-1.5 3h1.5m-1.5 3h1.5m3-6H15m-1.5 3H15m-1.5 3H15M9 21v-3.375c0-.621.504-1.125 1.125-1.125h3.75c.621 0 1.125.504 1.125 1.125V21"/>
+            </svg>
+          </div>
+          <div>
+            <p class="font-bebas text-2xl tracking-widest">{{ emptyLabel() }}</p>
+            <p class="mt-1 text-[0.84rem] text-white/38 max-w-xs mx-auto leading-relaxed">
+              {{ emptySubLabel() }}
+            </p>
+          </div>
+          @if (activeTab()==='joined') {
+            <button (click)="setTab('browse')"
+                    class="flex items-center gap-2 px-5 py-2.5 rounded-xl cursor-pointer
+                           font-mono-dm text-[0.6rem] tracking-wider uppercase font-medium
+                           bg-indigo-400/10 text-indigo-300 border border-indigo-400/20
+                           hover:bg-indigo-400/20 transition-all duration-150">
+              Browse Organisations
+            </button>
+          }
+        </div>
+
+      } @else {
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          @for (m of filteredMyOrgs(); track m.organizationId; let i = $index) {
+            <div class="org-card relative rounded-2xl overflow-hidden flex flex-col page-enter
+                        border bg-[#0c0c10]
+                        transition-all duration-300 hover:-translate-y-1
+                        hover:shadow-[0_20px_60px_rgba(0,0,0,.5)]"
+                 [class.border-amber-400/20]="m.status===MS.Pending"
+                 [class.hover:border-amber-400/35]="m.status===MS.Pending"
+                 [class.border-white/[0.07]]="m.status!==MS.Pending"
+                 [class.hover:border-indigo-400/25]="m.status!==MS.Pending"
+                 [style.animation-delay]="i*45+'ms'">
+
+              @if (busyId()===m.organizationId) {
+                <div class="absolute inset-0 z-10 rounded-2xl flex items-center justify-center"
+                     style="background:rgba(6,6,8,.7);backdrop-filter:blur(4px)">
+                  <div class="spin w-6 h-6 rounded-full border-2 border-white/15 border-t-white"></div>
+                </div>
+              }
+
+              <!-- Cover -->
+              <div class="relative h-[72px] shrink-0 overflow-hidden"
+                   style="background:linear-gradient(135deg,rgba(99,102,241,.15),rgba(165,180,252,.05))">
+                @if (m.organization?.coverUrl) {
+                  <img [src]="m.organization!.coverUrl!" [alt]="m.organization?.name??''"
+                       class="w-full h-full object-cover opacity-70" (error)="onImgErr($event)"/>
+                }
+                <div class="cover-fade absolute inset-0"></div>
+              </div>
+
+              <!-- Body -->
+              <div class="px-4 pb-4 flex flex-col gap-3 flex-1">
+                <!-- Logo + name -->
+                <div class="flex items-end gap-3">
+                  <div class="w-11 h-11 rounded-xl shrink-0 overflow-hidden border-2 border-[#0c0c10]
+                              -mt-[22px] relative z-[1] flex items-center justify-center"
+                       [style]="getLogoStyleFromMembership(m)">
+                    @if (m.organization?.logoUrl) {
+                      <img [src]="m.organization!.logoUrl!" [alt]="m.organization?.name??''"
+                           class="w-full h-full object-cover" (error)="onImgErr($event)"/>
+                    } @else {
+                      <span class="font-bebas text-base text-white">{{ membershipInitials(m) }}</span>
+                    }
+                  </div>
+                  <div class="flex-1 min-w-0">
+                    <p class="font-bebas text-base tracking-wide leading-tight truncate">
+                      {{ m.organization?.name ?? 'Org #'+m.organizationId }}
+                    </p>
+                    @if (m.organization?.city) {
+                      <p class="font-mono-dm text-[0.54rem] tracking-wider text-white/30">
+                        {{ m.organization!.city }}{{ m.organization?.region ? ', '+m.organization!.region : '' }}
+                      </p>
+                    }
+                  </div>
+                </div>
+
+                @if (m.organization?.bio) {
+                  <p class="text-[0.78rem] text-white/38 leading-relaxed line-clamp-2">
+                    {{ m.organization!.bio }}
+                  </p>
+                }
+
+                <!-- Status + date -->
+                <div>
+                  <span class="inline-flex items-center gap-1 px-2.5 py-[3px] rounded-full border
+                               font-mono-dm text-[0.54rem] tracking-widest uppercase font-medium"
+                        [class.bg-emerald-500/10]="m.status===MS.Approved"
+                        [class.border-emerald-500/20]="m.status===MS.Approved"
+                        [class.text-emerald-400]="m.status===MS.Approved"
+                        [class.bg-amber-400/10]="m.status===MS.Pending"
+                        [class.border-amber-400/25]="m.status===MS.Pending"
+                        [class.text-amber-400]="m.status===MS.Pending"
+                        [class.bg-red-400/10]="m.status===MS.Banned"
+                        [class.border-red-400/20]="m.status===MS.Banned"
+                        [class.text-red-400]="m.status===MS.Banned">
+                    {{ statusLabel(m.status) }}
+                  </span>
+                  <p class="mt-1.5 font-mono-dm text-[0.54rem] tracking-wider text-white/25">
+                    @if (m.status===MS.Pending) {
+                      Requested {{ m.requestDate | date:'MMM d, y' }}
+                    } @else if (m.joinDate) {
+                      Joined {{ m.joinDate | date:'MMM d, y' }}
+                    }
+                  </p>
+                </div>
+
+                <!-- Actions -->
+                @if (m.status===MS.Approved) {
+                  <button (click)="leave(m.organizationId, m.organization?.name??'this org')"
+                          [disabled]="busyId()!==null"
+                          class="w-full flex items-center justify-center gap-2 py-2.5 px-3
+                                 rounded-xl font-mono-dm text-[0.6rem] tracking-wider uppercase font-medium
+                                 bg-white/[0.04] text-white/40 border border-white/[0.08]
+                                 hover:bg-red-500/10 hover:text-red-400 hover:border-red-500/20
+                                 disabled:opacity-35 disabled:cursor-not-allowed
+                                 transition-all duration-150 cursor-pointer">
+                    <svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15m3 0l3-3m0 0l-3-3m3 3H9"/>
+                    </svg>
+                    Leave Organisation
+                  </button>
+                }
+                @if (m.status===MS.Pending) {
+                  <button disabled
+                          class="w-full flex items-center justify-center gap-2 py-2.5 px-3
+                                 rounded-xl font-mono-dm text-[0.6rem] tracking-wider uppercase font-medium
+                                 bg-amber-400/[0.06] text-amber-400/50 border border-amber-400/12 cursor-default">
+                    <svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                    Awaiting approval…
+                  </button>
+                }
+              </div>
+              <div class="org-glow"></div>
+            </div>
+          }
+        </div>
+      }
+    }
+
+  </main>
+</div>
+  `,
 })
-export class MyMembershipsPage implements OnInit, OnDestroy {
- private readonly http = inject(HttpClient);
- private readonly auth = inject(AuthService);
- private readonly d$   = new Subject<void>();
+export class MyMembershipsPage implements OnInit {
+  private svc = inject(UserMembershipService);
 
- readonly MS = MembershipStatus;
+  readonly MS = MembershipStatus;
 
- memberships     = signal<Membership[]>([]);
- loadingMembers  = signal(true);
- discoverOrgs    = signal<DiscoverOrg[]>([]);
- loadingDiscover = signal(true);
- activeCat       = signal<number | null>(null);
- catTabs         = signal<{ id: number; name: string }[]>([]);
- joiningId       = signal<number | null>(null);
- toast           = signal<{ msg: string; type: 'success' | 'error' } | null>(null);
- private toastTimer: ReturnType<typeof setTimeout> | null = null;
+  myMemberships = signal<UserOrgMembership[]>([]);
+  allOrgs       = signal<OrgSummary[]>([]);
+  loading       = signal(false);
+  browseLoading = signal(false);
+  busyId        = signal<number | null>(null);
+  activeTab     = signal<ActiveTab>('joined');
+  searchQuery   = signal('');
 
- visibleOrgs = computed(() => {
-   const cat = this.activeCat();
-   return cat === null ? this.discoverOrgs() : this.discoverOrgs().filter(o => o.catId === cat);
- });
+  joinedCount  = computed(() => this.myMemberships().filter(m => m.status === MembershipStatus.Approved).length);
+  pendingCount = computed(() => this.myMemberships().filter(m => m.status === MembershipStatus.Pending).length);
 
- ngOnInit()    { this.loadMemberships(); this.loadDiscover(); }
- ngOnDestroy() {
-   this.d$.next(); this.d$.complete();
-   if (this.toastTimer) clearTimeout(this.toastTimer);
- }
+  private membershipMap = computed<Map<number, MembershipStatus>>(() => {
+    const map = new Map<number, MembershipStatus>();
+    this.myMemberships().forEach(m => map.set(m.organizationId, m.status));
+    return map;
+  });
 
- // ── A: My memberships — GET /api/User → hydrate missing org details ────────
- private loadMemberships() {
-   this.loadingMembers.set(true);
-   this.http.get<{ data: any; success: boolean }>(`${BASE}/User`).pipe(
-     map(r => r.data),
-     catchError(() => of(null)),
-     takeUntil(this.d$),
-   ).subscribe(user => {
-     if (!user) { this.loadingMembers.set(false); return; }
-     const raw: any[] = user.memberships ?? [];
-     if (raw.length === 0) { this.loadingMembers.set(false); return; }
+  statsCards = computed(() => [
+    {
+      label: 'Joined',    value: this.joinedCount(),
+      color: '#10b981',   bgColor: 'rgba(16,185,129,.1)',
+      path: 'M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z',
+    },
+    {
+      label: 'Pending',   value: this.pendingCount(),
+      color: '#F0B429',   bgColor: 'rgba(240,180,41,.1)',
+      path: 'M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z',
+    },
+    {
+      label: 'Available', value: this.allOrgs().length,
+      color: '#a5b4fc',   bgColor: 'rgba(99,102,241,.1)',
+      path: 'M3.75 21h16.5M4.5 3h15M5.25 3v18m13.5-18v18M9 6.75h1.5m-1.5 3h1.5m-1.5 3h1.5m3-6H15m-1.5 3H15m-1.5 3H15M9 21v-3.375c0-.621.504-1.125 1.125-1.125h3.75c.621 0 1.125.504 1.125 1.125V21',
+    },
+  ]);
 
-     const needHydration  = raw.filter(m => !m.organization && m.organizationId);
-     const alreadyHydrated = raw.filter(m =>  m.organization || !m.organizationId);
+  filteredMyOrgs = computed<UserOrgMembership[]>(() => {
+    const statusMap: Record<'joined'|'pending', MembershipStatus[]> = {
+      joined:  [MembershipStatus.Approved],
+      pending: [MembershipStatus.Pending],
+    };
+    const tab = this.activeTab();
+    if (tab === 'browse') return [];
+    const q = this.searchQuery().toLowerCase().trim();
+    return this.myMemberships()
+      .filter(m => statusMap[tab].includes(m.status))
+      .filter(m => !q ||
+        m.organization?.name?.toLowerCase().includes(q) ||
+        m.organization?.city?.toLowerCase().includes(q));
+  });
 
-     if (needHydration.length === 0) {
-       this.memberships.set(raw.map(m => this.mapM(m)));
-       this.loadingMembers.set(false);
-       return;
-     }
+  filteredBrowseOrgs = computed<OrgSummary[]>(() => {
+    const q = this.searchQuery().toLowerCase().trim();
+    return this.allOrgs().filter(o =>
+      !q || o.name?.toLowerCase().includes(q) ||
+            o.city?.toLowerCase().includes(q) ||
+            o.bio?.toLowerCase().includes(q));
+  });
 
-     forkJoin(
-       needHydration.map(m =>
-         this.http.get<{ data: any }>(`${BASE}/Organization/${m.organizationId}`)
-           .pipe(catchError(() => of({ data: null })))
-       )
-     ).pipe(takeUntil(this.d$)).subscribe(results => {
-       const hydrated = needHydration.map((m, i) => ({ ...m, organization: results[i]?.data ?? null }));
-       this.memberships.set([...alreadyHydrated, ...hydrated].map(m => this.mapM(m)));
-       this.loadingMembers.set(false);
-     });
-   });
- }
+  emptyLabel    = computed(() =>
+    this.searchQuery().trim() ? 'No matches found' :
+    this.activeTab() === 'joined' ? 'No Active Memberships' : 'No Pending Requests');
 
- private mapM(m: any): Membership {
-   return {
-     organizationId: m.organizationId,
-     organization:   m.organization ?? null,
-     status:         m.status ?? MembershipStatus.Pending,
-     requestDate:    m.requestDate ?? new Date().toISOString(),
-     joinDate:       m.joinDate ?? null,
-   };
- }
+  emptySubLabel = computed(() =>
+    this.activeTab() === 'joined'
+      ? 'Browse organisations and request to join one.'
+      : 'Your join requests will appear here once submitted.');
 
- // ── B: Discover orgs from user's favourite categories ─────────────────────
- private loadDiscover() {
-   this.loadingDiscover.set(true);
+  ngOnInit() {
+    this.loadMyMemberships();
+    this.loadAllOrgs();
+  }
 
-   this.http.get<{ data: any[]; success: boolean }>(`${BASE}/User/favorites`).pipe(
-     map(r => r.data ?? []),
-     catchError(() => of([] as any[])),
-     takeUntil(this.d$),
-   ).subscribe(cats => {
-     if (cats.length === 0) { this.loadingDiscover.set(false); return; }
+  private loadMyMemberships() {
+    this.loading.set(true);
+    this.svc.getMyMemberships().subscribe({
+      next:  ms => { this.myMemberships.set(ms); this.loading.set(false); },
+      error: ()  => { toast.error('Failed to load your memberships'); this.loading.set(false); },
+    });
+  }
 
-     this.catTabs.set(cats.map((c: any) => ({ id: c.id, name: c.name })));
+  private loadAllOrgs() {
+    this.browseLoading.set(true);
+    this.svc.getAllOrganizations().subscribe({
+      next:  orgs => { this.allOrgs.set(orgs); this.browseLoading.set(false); },
+      error: ()    => { toast.error('Failed to load organisations'); this.browseLoading.set(false); },
+    });
+  }
 
-     forkJoin(
-       cats.map((cat: any) =>
-         this.http.get<{ data: any[] }>(`${BASE}/Event/Category?categoryId=${cat.id}`).pipe(
-           map(r => ({ catId: cat.id, catName: cat.name, events: r.data ?? [] })),
-           catchError(() => of({ catId: cat.id, catName: cat.name, events: [] as any[] }))
-         )
-       )
-     ).pipe(takeUntil(this.d$)).subscribe((catResults: any[]) => {
-       // Collect unique orgIds
-       const orgMap = new Map<number, { catId: number; catName: string }>();
-       catResults.forEach(({ catId, catName, events }) => {
-         events.forEach((ev: any) => {
-           if (ev.organizationId && !orgMap.has(ev.organizationId)) {
-             orgMap.set(ev.organizationId, { catId, catName });
-           }
-         });
-       });
+  setTab(t: ActiveTab) { this.activeTab.set(t); this.searchQuery.set(''); }
+  onSearch(e: Event)   { this.searchQuery.set((e.target as HTMLInputElement).value); }
 
-       if (orgMap.size === 0) { this.loadingDiscover.set(false); return; }
+  join(org: OrgSummary) {
+    if (this.busyId() !== null) return;
+    this.busyId.set(org.id);
+    this.svc.joinOrganization(org.id).subscribe({
+      next: () => {
+        const newMembership: UserOrgMembership = {
+          userId: 0, organizationId: org.id,
+          status: MembershipStatus.Pending,
+          requestDate: new Date().toISOString(),
+          joinDate: null, organization: org,
+        };
+        this.myMemberships.update(l => [...l, newMembership]);
+        toast.success('Request sent to ' + (org.name ?? 'organisation'));
+        this.busyId.set(null);
+      },
+      error: err => { toast.error(err.error?.message || 'Failed to send request'); this.busyId.set(null); },
+    });
+  }
 
-       const entries = Array.from(orgMap.entries()).slice(0, 20);
+  leave(orgId: number, orgName: string) {
+    if (this.busyId() !== null) return;
+    if (!confirm('Leave ' + orgName + '? You can re-apply later.')) return;
+    this.busyId.set(orgId);
+    this.svc.leaveOrganization(orgId).subscribe({
+      next: () => {
+        this.myMemberships.update(l => l.filter(m => m.organizationId !== orgId));
+        toast.success('You left ' + orgName);
+        this.busyId.set(null);
+      },
+      error: err => { toast.error(err.error?.message || 'Failed to leave'); this.busyId.set(null); },
+    });
+  }
 
-       forkJoin(
-         entries.map(([orgId]) =>
-           forkJoin({
-             profile: this.http.get<{ data: any }>(`${BASE}/Organization/${orgId}`)
-               .pipe(catchError(() => of({ data: null }))),
-             orgEvs: this.http.get<{ data: any[] }>(`${BASE}/Event/organization?organizationId=${orgId}`)
-               .pipe(catchError(() => of({ data: [] as any[] }))),
-           })
-         )
-       ).pipe(takeUntil(this.d$)).subscribe(results => {
-         const orgs: DiscoverOrg[] = [];
-         results.forEach((res, i) => {
-           const d = res.profile?.data;
-           if (!d) return;
-           const [, meta] = entries[i];
-           orgs.push({
-             id: d.id, name: d.name ?? null, bio: d.bio ?? null,
-             city: d.city ?? null, region: d.region ?? null,
-             logoUrl: d.logoUrl ?? null, coverUrl: d.coverUrl ?? null,
-             catId: meta.catId, catName: meta.catName,
-             eventCount: (res.orgEvs?.data ?? []).length,
-           });
-         });
+  getMembershipStatus(orgId: number): MembershipStatus | null {
+    return this.membershipMap().get(orgId) ?? null;
+  }
 
-         // Non-members first, then by event count
-         orgs.sort((a, b) => {
-           const am = this.membershipOf(a.id) === MembershipStatus.Approved ? 1 : 0;
-           const bm = this.membershipOf(b.id) === MembershipStatus.Approved ? 1 : 0;
-           return am - bm || b.eventCount - a.eventCount;
-         });
+  statusLabel(s: MembershipStatus): string {
+    const map: Record<number, string> = {
+      [MembershipStatus.Approved]: 'Member',
+      [MembershipStatus.Pending]:  'Pending',
+      [MembershipStatus.Banned]:   'Banned',
+      [MembershipStatus.Rejected]: 'Rejected',
+    };
+    return map[s] ?? 'Unknown';
+  }
 
-         this.discoverOrgs.set(orgs);
-         this.loadingDiscover.set(false);
-       });
-     });
-   });
- }
+  orgInitials(org: OrgSummary): string {
+    return (org.name ?? '?').slice(0, 2).toUpperCase();
+  }
 
- // ── Join ───────────────────────────────────────────────────────────────────
- join(orgId: number) {
-   if (this.joiningId() !== null) return;
-   this.joiningId.set(orgId);
+  membershipInitials(m: UserOrgMembership): string {
+    return (m.organization?.name ?? '?').slice(0, 2).toUpperCase();
+  }
 
-   this.http.post<{ success: boolean; message: string | null }>(
-     `${BASE}/OrganizationMemberShip/${orgId}/join`, {}
-   ).pipe(
-     catchError(err => {
-       this.showToast(err?.error?.message ?? 'Failed to send request.', 'error');
-       this.joiningId.set(null);
-       return of(null);
-     }),
-     takeUntil(this.d$),
-   ).subscribe(res => {
-     this.joiningId.set(null);
-     if (!res) return;
-     this.showToast('Join request sent!', 'success');
+  private readonly _palettes = [
+    'linear-gradient(135deg,#4f46e5,#7c3aed)',
+    'linear-gradient(135deg,#FF4433,#ff6b45)',
+    'linear-gradient(135deg,#0891b2,#0e7490)',
+    'linear-gradient(135deg,#059669,#047857)',
+    'linear-gradient(135deg,#d97706,#b45309)',
+    'linear-gradient(135deg,#db2777,#9d174d)',
+  ];
 
-     if (!this.memberships().some(m => m.organizationId === orgId)) {
-       const org = this.discoverOrgs().find(o => o.id === orgId) ?? null;
-       this.memberships.update(list => [...list, {
-         organizationId: orgId, organization: org,
-         status: MembershipStatus.Pending, requestDate: new Date().toISOString(), joinDate: null,
-       }]);
-     }
-   });
- }
+  getLogoStyle(org: OrgSummary): string {
+    return 'background:' + this._palettes[org.id % this._palettes.length];
+  }
 
- // ── Helpers ────────────────────────────────────────────────────────────────
- membershipOf(orgId: number): MembershipStatus | null {
-   return this.memberships().find(m => m.organizationId === orgId)?.status ?? null;
- }
- fmt(iso?: string | null): string {
-   if (!iso) return '';
-   return new Date(iso).toLocaleDateString('en-EG', { day: 'numeric', month: 'short', year: 'numeric' });
- }
- statusLbl(s: MembershipStatus): string {
-   return ({[MembershipStatus.Approved]:'Active',[MembershipStatus.Pending]:'Pending',
-            [MembershipStatus.Banned]:'Banned',[MembershipStatus.Rejected]:'Rejected'} as any)[s] ?? 'Unknown';
- }
- pillCls(s: MembershipStatus): string {
-   return ({[MembershipStatus.Approved]:'mm-pill--active',[MembershipStatus.Pending]:'mm-pill--pending',
-            [MembershipStatus.Banned]:'mm-pill--banned',[MembershipStatus.Rejected]:'mm-pill--rejected'} as any)[s] ?? '';
- }
- dotCls(s: MembershipStatus): string {
-   return ({[MembershipStatus.Approved]:'mm-dot--active',[MembershipStatus.Pending]:'mm-dot--pending',
-            [MembershipStatus.Banned]:'mm-dot--banned',[MembershipStatus.Rejected]:'mm-dot--muted'} as any)[s] ?? '';
- }
- private readonly _grads = [
-   'linear-gradient(135deg,#6366f1,#8b5cf6)',
-   'linear-gradient(135deg,#0891b2,#0e7490)',
-   'linear-gradient(135deg,#059669,#047857)',
-   'linear-gradient(135deg,#d97706,#b45309)',
-   'linear-gradient(135deg,#db2777,#9d174d)',
-   'linear-gradient(135deg,#FF4433,#ff6b45)',
- ];
- grad(id: number): string { return 'background:' + this._grads[id % this._grads.length]; }
- onImgErr(e: Event) { (e.target as HTMLImageElement).style.display = 'none'; }
+  getLogoStyleFromMembership(m: UserOrgMembership): string {
+    return 'background:' + this._palettes[m.organizationId % this._palettes.length];
+  }
 
- onCoverErr(e: Event) {
-   const img  = e.target as HTMLImageElement;
-   const wrap = img.closest('.mm-card__cover') as HTMLElement | null;
-   if (!wrap) return;
-   img.remove();
-   wrap.style.cssText = 'position:relative;height:72px;min-height:72px;max-height:72px;overflow:hidden;flex-shrink:0;background:#0d0d14';
-   wrap.innerHTML = `
-     <div style="position:absolute;inset:0;background-image:repeating-linear-gradient(0deg,rgba(255,255,255,.025) 0px,rgba(255,255,255,.025) 1px,transparent 1px,transparent 20px),repeating-linear-gradient(90deg,rgba(255,255,255,.025) 0px,rgba(255,255,255,.025) 1px,transparent 1px,transparent 20px)"></div>
-     <div style="position:absolute;width:120px;height:120px;border-radius:50%;top:-40px;right:20px;background:radial-gradient(circle,rgba(165,180,252,.12) 0%,transparent 70%)"></div>
-     <div style="position:absolute;width:80px;height:80px;border-radius:50%;bottom:-30px;left:10px;background:radial-gradient(circle,rgba(240,180,41,.08) 0%,transparent 70%)"></div>`;
- }
- private showToast(msg: string, type: 'success' | 'error') {
-   this.toast.set({ msg, type });
-   if (this.toastTimer) clearTimeout(this.toastTimer);
-   this.toastTimer = setTimeout(() => this.toast.set(null), 3200);
- }
+  onImgErr(e: Event) { (e.target as HTMLImageElement).style.display = 'none'; }
 }
