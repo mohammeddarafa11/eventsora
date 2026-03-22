@@ -130,12 +130,29 @@ export const routes: Routes = [
             m => m.MyMeetupsPage,
           ),
       },
-      { path: 'my-created-meetups', loadComponent:()=> import('./features/user-dashboard/my-created-meetups/my-created-meetups').then((c)=> c.MyCreatedMeetupsPage) },
+
+      {
+        path: 'my-created-meetups',
+        loadComponent: () =>
+          import('./features/user-dashboard/my-created-meetups/my-created-meetups').then(
+            c => c.MyCreatedMeetupsPage,
+          ),
+      },
+
       {
         path: 'my-memberships',
         loadComponent: () =>
           import('./features/user-dashboard/my-memberships/my-memberships').then(
             m => m.MyMembershipsPage,
+          ),
+      },
+
+      // Private events the user has access to — GET /api/Event/PrivateEventsByUserId
+      {
+        path: 'my-private-events',
+        loadComponent: () =>
+          import('./features/user-dashboard/my-private-events/my-private-events').then(
+            m => m.MyPrivateEventsPage,
           ),
       },
 

@@ -292,7 +292,16 @@ readonly communityNavItems: { label: string; route: string; svg: string; exact?:
                      016 0zm6 3a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0zm-13.5 0a2.25 2.25 0 11-4.5
                      0 2.25 2.25 0 014.5 0z"/>
           </svg>`,
-  }
+  },
+  {
+    label: 'Private Events', route: '/user-dashboard/my-private-events',
+    svg: `<svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round"
+                  d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0
+                     002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0
+                     00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z"/>
+          </svg>`,
+  },
 ];
 
   logout(): void {
