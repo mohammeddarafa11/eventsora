@@ -5,11 +5,12 @@ import { CommonModule } from '@angular/common';
 import { AuthService } from '@core/services/auth.service';
 import { inject } from '@angular/core';
 import { Router } from '@angular/router';
+import { EventoraAiChatbot } from './eventora-ai/eventora-ai';
 
 @Component({
   selector: 'app-user-dashboard',
   standalone: true,
-  imports: [RouterOutlet, RouterLink, RouterLinkActive, CommonModule],
+  imports: [RouterOutlet, RouterLink, RouterLinkActive, CommonModule, EventoraAiChatbot],
   template: `
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet" />
@@ -97,6 +98,7 @@ import { Router } from '@angular/router';
         </div>
       </main>
 
+      <app-eventora-ai-widget />
     </div>
   `,
   styles: [`

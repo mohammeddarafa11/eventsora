@@ -103,6 +103,9 @@ export const routes: Routes = [
           ),
       },
 
+      // Eventora AI is a floating widget on the shell (/user-dashboard) — legacy URL
+      { path: 'assistant', pathMatch: 'full', redirectTo: '' },
+
       // Edit genre interests
       {
         path: 'edit-interests',
